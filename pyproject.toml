@@ -27,8 +27,8 @@ classifiers = [
     "Topic :: Database",
 ]
 dependencies = [
-    "neomodel~=5.3.0",
-    'django>=4.2.8'
+    'Django >= 6.0',
+    'NeoModel >= 6.0',
 ]
 version='0.2.0'
 
