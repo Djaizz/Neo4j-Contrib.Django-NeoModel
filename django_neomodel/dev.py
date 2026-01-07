@@ -294,23 +294,6 @@ class DjangoNeoModelAdmin(ModelAdmin):
         """Override to prevent Django from checking database table existence."""
         return True
 
-    def get_queryset(self, request):
-        """Override to return clean queryset without Django Q objects.
-
-        Default implementation uses self.model.objects.all() (which is an alias for nodes.all()).
-        Subclasses can override if custom queryset logic is needed.
-
-        Note: NodeSet now has count() and _clone() methods and is iterable, so it works
-        directly with Django Admin. We only need to add .model attribute.
-        """
-        # Use objects.all() which is an alias for nodes.all() via DjangoNeoNode.objects descriptor
-        queryset = self.model.objects.all()
-        # NodeSets are iterable and have count() and _clone(), so they work directly
-        # Just add .model attribute if it doesn't exist
-        if not hasattr(queryset, 'model'):
-            queryset.model = self.model
-        return queryset
-
     def get_object(self, request, object_id, from_field=None):
         """Override to handle NeoModel nodes that use custom unique identifiers as pk.
 
