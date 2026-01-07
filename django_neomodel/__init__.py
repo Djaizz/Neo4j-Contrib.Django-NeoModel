@@ -269,7 +269,7 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
 
         return opts
 
-    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):
+    def full_clean(self, exclude=None, validate_unique=False, validate_constraints=True):
         """
         Validate node, on error raising ValidationErrors which can be handled by django forms
 

@@ -1,9 +1,12 @@
 """Django Admin integration for NeoModel nodes."""
 
 import logging
+import traceback
+from io import StringIO
 
 from django.contrib.admin import ModelAdmin
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
+from django.utils.html import format_html
 
 from neomodel.match_q import Q
 
@@ -41,6 +44,54 @@ class DjangoNeoModelAdmin(ModelAdmin):
                               request: HttpRequest,
                               obj: DjangoNode | None = None) -> bool:
         return True
+
+    def has_view_permission(self,
+                            request: HttpRequest,
+                            obj: DjangoNode | None = None) -> bool:
+        """Return True if the given request has permission to view the given model instance.
+
+        This is required for Django Admin's changelist_view, which checks
+        has_view_or_change_permission, which in turn calls has_view_permission.
+        """
+        return True
+
+    def has_view_or_change_permission(self,
+                                      request: HttpRequest,
+                                      obj: DjangoNode | None = None) -> bool:
+        """Return True if the request has permission to view or change the model instance.
+
+        This is checked by changelist_view before displaying the changelist.
+        """
+        return self.has_view_permission(request, obj) or self.has_change_permission(request, obj)
+
+    def get_queryset(self, request):
+        """Return a queryset for use in Django Admin.
+
+        This ensures we return a properly initialized NodeSet from the model's objects manager.
+        Override to catch errors during queryset creation.
+        """
+        try:
+            return self.model.objects.all()
+        except Exception as e:
+            # Log the full error with traceback
+            logger.error(
+                f"Error in {self.__class__.__name__}.get_queryset for {self.model.__name__}: {e}",
+                exc_info=True,
+                stack_info=True
+            )
+            # Print to stderr for immediate visibility (always shows)
+            import sys
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print(f"ERROR in {self.__class__.__name__}.get_queryset for {self.model.__name__}:", file=sys.stderr)
+            print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+            print(f"Exception message: {e}", file=sys.stderr)
+            print("\nFull traceback:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            # Re-raise to show actual error
+            raise
 
     def get_object(self, request, object_id, from_field=None):
         """Override to handle NeoModel nodes that use custom unique identifiers as pk.
@@ -81,22 +132,105 @@ class DjangoNeoModelAdmin(ModelAdmin):
         This default implementation handles search across all fields in `search_fields` using
         NeoModel's Q objects with OR logic. Subclasses can override for custom search behavior.
         """
-        if search_term and self.search_fields:
-            # Build Q filters for each search field
-            q_filters = []
-            for field in self.search_fields:
-                q_filters.append(Q(**{f"{field}__icontains": search_term}))
+        if search_term and self.search_fields and len(self.search_fields) > 0:
+            # Build a single Q object with OR conditions for all search fields
+            # NeoModel's q_filters is a single Q object, not a list
+            if len(self.search_fields) == 1:
+                # Single field - create Q object directly
+                field = self.search_fields[0]
+                search_q = Q(**{f"{field}__icontains": search_term})
+            else:
+                # Multiple fields - combine with OR using | operator
+                # Start with first field, then OR with each subsequent field
+                search_q = Q(**{f"{self.search_fields[0]}__icontains": search_term})
+                for field in self.search_fields[1:]:
+                    search_q = search_q | Q(**{f"{field}__icontains": search_term})
 
-            # Combine Q filters using OR logic
-            # NeoModel's Q objects support | operator for OR combination
-            if len(q_filters) == 1:
-                # Single filter - apply directly
-                queryset = queryset.filter(q_filters[0])
-            elif len(q_filters) > 1:
-                # Multiple filters - combine with OR
-                # Start with first filter, then combine with each subsequent one
-                combined_q = q_filters[0]
-                for q_filter in q_filters[1:]:
-                    combined_q = combined_q | q_filter
-                queryset = queryset.filter(combined_q)
+            # Apply the combined Q filter to the queryset
+            # NeoModel's filter() will AND this with existing q_filters
+            queryset = queryset.filter(search_q)
         return queryset, False  # False = no distinct needed for NeoModel
+
+    def get_changelist(self, request, **kwargs):
+        """Return the ChangeList class for use on the changelist page.
+
+        Override to catch errors during ChangeList instantiation.
+        """
+        try:
+            return super().get_changelist(request, **kwargs)
+        except Exception as e:
+            # Log the full error with traceback
+            logger.error(
+                f"Error in {self.__class__.__name__}.get_changelist for {self.model.__name__}: {e}",
+                exc_info=True,
+                stack_info=True
+            )
+            # Print to stderr for immediate visibility (always shows)
+            import sys
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print(f"ERROR in {self.__class__.__name__}.get_changelist for {self.model.__name__}:", file=sys.stderr)
+            print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+            print(f"Exception message: {e}", file=sys.stderr)
+            print("\nFull traceback:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            # Re-raise to show actual error in Django Admin
+            raise
+
+    def changelist_view(self, request, extra_context=None):
+        """The 'change list' admin view for this model.
+
+        Override to catch errors during changelist rendering.
+        """
+        try:
+            return super().changelist_view(request, extra_context)
+        except Exception as e:
+            # Log the full error with traceback
+            logger.error(
+                f"Error in {self.__class__.__name__}.changelist_view for {self.model.__name__}: {e}",
+                exc_info=True,
+                stack_info=True
+            )
+            # Print to stderr for immediate visibility (always shows)
+            import sys
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print(f"ERROR in {self.__class__.__name__}.changelist_view for {self.model.__name__}:", file=sys.stderr)
+            print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+            print(f"Exception message: {e}", file=sys.stderr)
+            print("\nFull traceback:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+
+            # Capture full traceback as string
+            traceback_buffer = StringIO()
+            traceback.print_exc(file=traceback_buffer)
+            traceback_str = traceback_buffer.getvalue()
+
+            # Return HttpResponse with full error details instead of re-raising
+            # This bypasses Django's generic error handling
+            error_html = format_html(
+                """
+                <html>
+                <head><title>Django Admin Error - {}</title></head>
+                <body>
+                    <h1>Error in {} for {}</h1>
+                    <h2>Exception Type: {}</h2>
+                    <h2>Exception Message:</h2>
+                    <pre style="background: #f0f0f0; padding: 10px; border: 1px solid #ccc;">{}</pre>
+                    <h2>Full Traceback:</h2>
+                    <pre style="background: #f0f0f0; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap;">{}</pre>
+                </body>
+                </html>
+                """,
+                self.model.__name__,
+                self.__class__.__name__,
+                self.model.__name__,
+                type(e).__name__,
+                str(e),
+                traceback_str
+            )
+            return HttpResponse(error_html, status=500)
