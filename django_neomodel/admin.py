@@ -7,7 +7,7 @@ from django.http import HttpRequest
 
 from neomodel.match_q import Q
 
-from django_neomodel.dev import DjangoNeoNode
+from . import DjangoNode
 
 
 __all__ = ['DjangoNeoModelAdmin']
@@ -26,7 +26,7 @@ class DjangoNeoModelAdmin(ModelAdmin):
     3. Optionally override `get_search_results` if custom search logic is needed
 
     The default `get_queryset` implementation uses `self.model.objects.all()` which is an alias
-    for `self.model.nodes.all()` via the `DjangoNeoNode.objects` descriptor.
+    for `self.model.nodes.all()` via the `DjangoNode.objects` descriptor.
     """
 
     def has_add_permission(self, request: HttpRequest) -> bool:
@@ -34,12 +34,12 @@ class DjangoNeoModelAdmin(ModelAdmin):
 
     def has_change_permission(self,
                               request: HttpRequest,
-                              obj: DjangoNeoNode | None = None) -> bool:
+                              obj: DjangoNode | None = None) -> bool:
         return True
 
     def has_delete_permission(self,
                               request: HttpRequest,
-                              obj: DjangoNeoNode | None = None) -> bool:
+                              obj: DjangoNode | None = None) -> bool:
         return True
 
     def get_object(self, request, object_id, from_field=None):
@@ -47,16 +47,19 @@ class DjangoNeoModelAdmin(ModelAdmin):
 
         Django Admin's default get_object expects a queryset with a .model attribute,
         but NeoModel NodeSets don't have that. This override directly queries the
-        NeoModel node by the class's _pk_field_name (e.g., uri, name, label).
+        NeoModel node by the field marked with primary_key=True.
 
         Note: NeoModel doesn't allow querying by element_id (it's an internal identifier),
-        so we use the class's _pk_field_name attribute to determine which field to query.
+        so we use the field marked with primary_key=True to determine which field to query.
         """
         try:
-            # Get the pk field name from the model class
-            pk_field_name = getattr(self.model, '_pk_field_name', None)
-            if not pk_field_name:
-                raise ValueError(f"{self.model.__name__} must set _pk_field_name class attribute (e.g., 'uri', 'name', 'label')")
+            # Get the pk field from the model class (set by DjangoNode._meta)
+            pk_prop = getattr(self.model, 'pk', None)
+            if not pk_prop:
+                raise ValueError(f"{self.model.__name__} must have a field with primary_key=True")
+
+            # Get the field name from the pk property
+            pk_field_name = pk_prop.name
 
             # object_id is the pk value (e.g., uri, name, label for NeoModel nodes)
             # Query directly using NeoModel's get method with the pk field

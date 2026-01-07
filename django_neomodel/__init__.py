@@ -195,8 +195,28 @@ class MetaClass(NodeMeta):
         return new_cls
 
 
+class _ObjectsDescriptor:
+    """Descriptor that provides Django-like 'objects' API for NeoModel nodes.
+
+    This allows classes to use Model.objects.all() instead of Model.nodes.all(),
+    making the API more Django-like for admin classes.
+
+    This is an internal implementation detail and should not be used directly.
+    """
+
+    def __get__(self, obj, cls=None):
+        """Return the 'nodes' manager when accessed as a class attribute."""
+        if cls is None:
+            cls = type(obj)
+        return cls.nodes
+
+
 class DjangoNode(StructuredNode, metaclass=MetaClass):
     __abstract_node__ = True
+
+    # Class-level descriptor that provides Django-like 'objects' API
+    # Usage: Model.objects.all() instead of Model.nodes.all()
+    objects = _ObjectsDescriptor()
 
     @classproperty
     def _meta(self):
