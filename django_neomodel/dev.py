@@ -4,9 +4,9 @@ This module provides base classes and utilities for integrating Django Admin wit
 It consolidates common patterns needed to make Django Admin work with NeoModel nodes.
 """
 
+import logging
 
 from abc import ABC, ABCMeta, abstractmethod
-import logging
 
 from django.contrib.admin import ModelAdmin
 from django.contrib.admin.views.main import ChangeList
@@ -15,7 +15,6 @@ from django_neomodel import DjangoField, DjangoNode
 
 
 logger = logging.getLogger(__name__)
-
 
 # Get the metaclass of DjangoNode to combine with ABCMeta
 _DjangoNodeMeta = type(DjangoNode)
@@ -56,6 +55,7 @@ if not hasattr(DjangoNode.serializable_value, '_patched_for_neomodel'):
 # ============================================================================
 # Base Classes
 # ============================================================================
+
 
 class _ObjectsDescriptor:
     """Descriptor that provides Django-like 'objects' API for NeoModel nodes.
@@ -152,44 +152,6 @@ class DjangoNeoField(DjangoField):
     """
 
 
-class ListQuerysetWrapper(list):
-    """A wrapper around a list to mimic Django QuerySet methods.
-
-    This is used when NeoModel NodeSets are converted to lists, but Django Admin
-    still expects methods like .count(), ._clone(), and .model attribute.
-    """
-    def __init__(self, items, model=None):
-        """Initialize wrapper with items and optional model reference.
-
-        Args:
-            items: List of items to wrap
-            model: The model class (used for .model attribute)
-        """
-        super().__init__(items)
-        self._model = model
-
-    @property
-    def model(self):
-        """Return the model class for Django conventions."""
-        return self._model
-
-    def count(self):
-        return len(self)
-
-    def _clone(self):
-        # Return a new instance with a shallow copy of items, mimicking QuerySet._clone()
-        return ListQuerysetWrapper(list(self), model=self._model)
-
-    def filter(self, *args, **kwargs):
-        # For simplicity, this wrapper does not implement full filtering.
-        # The actual filtering should happen at the NeoModel NodeSet level.
-        # If Django Admin tries to filter this list, it means the get_queryset
-        # in ChangeList or ModelAdmin was not correctly overridden.
-        logger.warning("Attempted to call .filter() on ListQuerysetWrapper. "
-                       "Ensure filtering is done on the NeoModel NodeSet.")
-        return self # Return self to allow chaining, but no actual filtering occurs
-
-
 class NoPkChangeList(ChangeList):
     """Custom ChangeList that prevents Django from using 'pk' for NeoModel nodes.
 
@@ -279,34 +241,19 @@ class NoPkChangeList(ChangeList):
         return url
 
     def get_results(self, request):
-        """Override to handle NeoModel NodeSets that may be converted to lists.
+        """Override to handle NeoModel NodeSets.
 
         Django Admin's get_results() expects a queryset with .count() and ._clone() methods.
-        If root_queryset or queryset is a list (converted from NodeSet), we need to handle it differently.
+        NodeSet now has these methods and is iterable, so it works directly with Django Admin.
         """
         try:
             logger.info(f"Getting results for ChangeList: {self.model.__name__}")
             logger.debug(f"root_queryset type: {type(self.root_queryset)}, queryset type: {type(self.queryset)}")
 
-            # Check if root_queryset or queryset is a list and wrap if needed
-            original_root_queryset = self.root_queryset
-            original_queryset = self.queryset
-            wrapped_root = isinstance(self.root_queryset, list)
-            wrapped_queryset = isinstance(self.queryset, list)
-
-            if wrapped_root:
-                self.root_queryset = ListQuerysetWrapper(self.root_queryset, model=self.model)
-            if wrapped_queryset:
-                self.queryset = ListQuerysetWrapper(self.queryset, model=self.model)
-
-            try:
-                result = super().get_results(request)
-                logger.info(f"Results retrieved successfully for {self.model.__name__}")
-                return result
-            finally:
-                # Restore originals
-                self.root_queryset = original_root_queryset
-                self.queryset = original_queryset
+            # NodeSets now have count() and _clone() and are iterable, so they work directly
+            result = super().get_results(request)
+            logger.info(f"Results retrieved successfully for {self.model.__name__}")
+            return result
         except Exception as e:
             logger.error(f"Exception in ChangeList.get_results for {self.model.__name__}: {e}", exc_info=True, stack_info=True)
             raise
@@ -355,15 +302,13 @@ class DjangoNeoModelAdmin(ModelAdmin):
         Default implementation uses self.model.objects.all() (which is an alias for nodes.all()).
         Subclasses can override if custom queryset logic is needed.
 
-        Note: This returns a NeoModel NodeSet, which may be converted to a list later.
-        If Django Admin needs a .model attribute, it should be handled in get_object override.
+        Note: NodeSet now has count() and _clone() methods and is iterable, so it works
+        directly with Django Admin. We only need to add .model attribute.
         """
         # Use objects.all() which is an alias for nodes.all() via DjangoNeoNode.objects descriptor
         queryset = self.model.objects.all()
-        # If queryset is a list (already converted), wrap it with model attribute
-        if isinstance(queryset, list):
-            return ListQuerysetWrapper(queryset, model=self.model)
-        # For NodeSets, add model attribute if it doesn't exist
+        # NodeSets are iterable and have count() and _clone(), so they work directly
+        # Just add .model attribute if it doesn't exist
         if not hasattr(queryset, 'model'):
             queryset.model = self.model
         return queryset
