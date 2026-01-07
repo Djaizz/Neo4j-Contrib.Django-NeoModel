@@ -101,32 +101,3 @@ class DjangoNeoNode(DjangoNode):
         Subclasses can override if they need a different string representation.
         """
         return str(self.pk)
-
-    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):
-        """Override full_clean to accept Django ORM parameters that NeoModel doesn't support.
-
-        Django Admin's ModelForm calls full_clean() with validate_unique and validate_constraints
-        parameters, but NeoModel's DjangoNode.full_clean() doesn't accept these parameters.
-        This override accepts them but ignores them, since NeoModel doesn't have Django ORM
-        constraints or unique validation in the same way.
-
-        Args:
-            exclude: Fields to exclude from validation (passed to parent)
-            validate_unique: Ignored (Django ORM-specific)
-            validate_constraints: Ignored (Django ORM-specific)
-        """
-        # Call parent full_clean with only the exclude parameter
-        # NeoModel's full_clean doesn't support validate_unique or validate_constraints
-        return super().full_clean(exclude=exclude, validate_unique=validate_unique)
-
-    def validate_constraints(self, exclude=None):
-        """Override validate_constraints to satisfy Django Admin's expectations.
-
-        Django Admin's ModelForm calls validate_constraints() on the model instance,
-        but NeoModel's DjangoNode doesn't have this method. This override provides
-        a no-op implementation since NeoModel doesn't have Django ORM constraints.
-
-        Args:
-            exclude: Fields to exclude from constraint validation (ignored)
-        """
-        # NeoModel doesn't have Django ORM constraints, so this is a no-op

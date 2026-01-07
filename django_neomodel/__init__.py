@@ -216,12 +216,13 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
 
         return opts
 
-    def full_clean(self, exclude, validate_unique=False):
+    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):
         """
         Validate node, on error raising ValidationErrors which can be handled by django forms
 
-        :param exclude:
+        :param exclude: Fields to exclude from validation
         :param validate_unique: Check if conflicting node exists in the labels indexes
+        :param validate_constraints: Ignored (Django ORM-specific, NeoModel doesn't have Django ORM constraints)
         :return:
         """
 
@@ -232,6 +233,8 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
             raise ValidationError({e.property_name: e.msg})
         except RequiredProperty as e:
             raise ValidationError({e.property_name: "is required"})
+
+        # Note: validate_constraints is ignored since NeoModel doesn't have Django ORM constraints
 
     def validate_unique(self, exclude):
         # get unique indexed properties
@@ -279,3 +282,15 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
 
     def serializable_value(self, attr):
         return str(getattr(self, attr))
+
+    def validate_constraints(self, exclude=None):
+        """Override validate_constraints to satisfy Django Admin's expectations.
+
+        Django Admin's ModelForm calls validate_constraints() on the model instance,
+        but NeoModel's DjangoNode doesn't have this method. This override provides
+        a no-op implementation since NeoModel doesn't have Django ORM constraints.
+
+        Args:
+            exclude: Fields to exclude from constraint validation (ignored)
+        """
+        # NeoModel doesn't have Django ORM constraints, so this is a no-op
