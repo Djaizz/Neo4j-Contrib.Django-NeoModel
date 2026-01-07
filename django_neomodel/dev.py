@@ -4,15 +4,18 @@ This module provides base classes and utilities for integrating Django Admin wit
 It consolidates common patterns needed to make Django Admin work with NeoModel nodes.
 """
 
-import logging
 
 from abc import ABC, ABCMeta, abstractmethod
+import logging
 
 from django.contrib.admin import ModelAdmin
 from django.contrib.admin.views.main import ChangeList
+
 from django_neomodel import DjangoField, DjangoNode
 
+
 logger = logging.getLogger(__name__)
+
 
 # Get the metaclass of DjangoNode to combine with ABCMeta
 _DjangoNodeMeta = type(DjangoNode)
