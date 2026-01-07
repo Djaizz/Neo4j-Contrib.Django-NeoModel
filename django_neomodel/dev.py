@@ -5,7 +5,7 @@ It consolidates common patterns needed to make Django Admin work with NeoModel n
 """
 
 
-from abc import ABC, ABCMeta, abstractmethod
+from abc import abstractmethod
 import logging
 
 from django.contrib.admin import ModelAdmin
@@ -21,14 +21,6 @@ logger = logging.getLogger(__name__)
 
 # Get the metaclass of DjangoNode to combine with ABCMeta
 _DjangoNodeMeta = type(DjangoNode)
-
-
-class _DjangoNeoNodeMeta(_DjangoNodeMeta, ABCMeta):
-    """Combined metaclass for DjangoNeoNode.
-
-    This metaclass combines the metaclass of DjangoNode (from NeoModel) with ABCMeta
-    to allow DjangoNeoNode to inherit from both DjangoNode and ABC without metaclass conflicts.
-    """
 
 
 # ============================================================================
@@ -76,7 +68,7 @@ class _ObjectsDescriptor:
         return cls.nodes
 
 
-class DjangoNeoNode(DjangoNode, ABC, metaclass=_DjangoNeoNodeMeta):
+class DjangoNeoNode(DjangoNode):
     """Base class for NeoModel nodes that work with Django Admin.
 
     This class provides fundamental adaptations from Django ORM to NeoModel:
