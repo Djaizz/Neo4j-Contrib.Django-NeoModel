@@ -9,6 +9,9 @@ from abc import abstractmethod
 import logging
 
 from django.contrib.admin import ModelAdmin
+from django.http import HttpRequest
+
+from neomodel.match_q import Q
 
 from django_neomodel import DjangoField, DjangoNode
 
@@ -151,16 +154,17 @@ class DjangoNeoModelAdmin(ModelAdmin):
     for `self.model.nodes.all()` via the `DjangoNeoNode.objects` descriptor.
     """
 
-    def has_add_permission(self, request):
-        """Override to prevent Django from checking database table existence."""
+    def has_add_permission(self, request: HttpRequest) -> bool:
         return True
 
-    def has_change_permission(self, request, obj=None):
-        """Override to prevent Django from checking database table existence."""
+    def has_change_permission(self,
+                              request: HttpRequest,
+                              obj: DjangoNeoNode | None = None) -> bool:
         return True
 
-    def has_delete_permission(self, request, obj=None):
-        """Override to prevent Django from checking database table existence."""
+    def has_delete_permission(self,
+                              request: HttpRequest,
+                              obj: DjangoNeoNode | None = None) -> bool:
         return True
 
     def get_object(self, request, object_id, from_field=None):
@@ -200,10 +204,9 @@ class DjangoNeoModelAdmin(ModelAdmin):
         NeoModel's Q objects with OR logic. Subclasses can override for custom search behavior.
         """
         if search_term and self.search_fields:
-            from neomodel.match_q import Q as NeoQ
             q_objects = []
             for field in self.search_fields:
-                q_objects.append(NeoQ(**{f"{field}__icontains": search_term}))
+                q_objects.append(Q(**{f"{field}__icontains": search_term}))
             # Combine with OR
             if q_objects:
                 combined_q = q_objects[0]
