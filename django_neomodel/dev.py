@@ -4,9 +4,9 @@ This module provides base classes and utilities for integrating Django Admin wit
 It consolidates common patterns needed to make Django Admin work with NeoModel nodes.
 """
 
-import logging
 
 from abc import ABC, ABCMeta, abstractmethod
+import logging
 
 from django.contrib.admin import ModelAdmin
 from django.contrib.admin.views.main import ChangeList
@@ -14,7 +14,14 @@ from django.contrib.admin.views.main import ChangeList
 from django_neomodel import DjangoField, DjangoNode
 
 
+__all__ = [
+    'DjangoNeoNode',
+    'DjangoNeoModelAdmin',
+]
+
+
 logger = logging.getLogger(__name__)
+
 
 # Get the metaclass of DjangoNode to combine with ABCMeta
 _DjangoNodeMeta = type(DjangoNode)
@@ -128,7 +135,7 @@ class DjangoNeoNode(DjangoNode, ABC, metaclass=_DjangoNeoNodeMeta):
         """
         # Call parent full_clean with only the exclude parameter
         # NeoModel's full_clean doesn't support validate_unique or validate_constraints
-        return super().full_clean(exclude=exclude)
+        return super().full_clean(exclude=exclude, validate_unique=validate_unique)
 
     def validate_constraints(self, exclude=None):
         """Override validate_constraints to satisfy Django Admin's expectations.
@@ -141,15 +148,6 @@ class DjangoNeoNode(DjangoNode, ABC, metaclass=_DjangoNeoNodeMeta):
             exclude: Fields to exclude from constraint validation (ignored)
         """
         # NeoModel doesn't have Django ORM constraints, so this is a no-op
-        pass
-
-
-class DjangoNeoField(DjangoField):
-    """Base class for NeoModel fields that work with Django Admin.
-
-    This class extends DjangoField but doesn't add any functionality yet.
-    It serves as a placeholder for future Django Admin-specific enhancements.
-    """
 
 
 class NoPkChangeList(ChangeList):
@@ -361,16 +359,3 @@ class DjangoNeoModelAdmin(ModelAdmin):
                     combined_q = combined_q | q_obj
                 queryset = queryset.filter(combined_q)
         return queryset, False  # False = no distinct needed for NeoModel
-
-
-# ============================================================================
-# Public API Exports
-# ============================================================================
-
-__all__ = [
-    'DjangoNeoNode',
-    'DjangoNeoField',
-    'DjangoNeoModelAdmin',
-    'NoPkChangeList',
-]
-
