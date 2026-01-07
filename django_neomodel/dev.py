@@ -66,9 +66,7 @@ class DjangoNeoNode(DjangoNode):
     """Base class for NeoModel nodes that work with Django Admin.
 
     This class provides fundamental adaptations from Django ORM to NeoModel:
-    - `pk` property: Abstract property that each subclass must implement to return its unique identifier
     - `objects` descriptor: Alias for `nodes` to provide Django-like API
-    - `_pk_field_name` class attribute: Each subclass must set this to the field name used for pk queries
 
     This is an abstract base class and should not have its own label in the database.
     """
@@ -77,27 +75,3 @@ class DjangoNeoNode(DjangoNode):
     # Class-level descriptor that provides Django-like 'objects' API
     # Usage: Model.objects.all() instead of Model.nodes.all()
     objects = _ObjectsDescriptor()
-
-    # Each subclass must set this to the field name used for primary key queries
-    # (e.g., 'uri', 'name', 'label')
-    _pk_field_name: str = None
-
-    @property
-    @abstractmethod
-    def pk(self):
-        """Return the unique identifier for this node as pk to adapt NeoModel to Django conventions.
-
-        Each subclass must implement this property to return its preferred unique identifier
-        (e.g., uri for schema classes, name for instantiation classes).
-
-        NeoModel doesn't allow querying by element_id (it's an internal identifier),
-        so each class must use its own unique field.
-        """
-        raise NotImplementedError("Subclasses must implement pk property")
-
-    def __str__(self) -> str:
-        """Default string representation using pk property.
-
-        Subclasses can override if they need a different string representation.
-        """
-        return str(self.pk)
