@@ -82,13 +82,21 @@ class DjangoNeoModelAdmin(ModelAdmin):
         NeoModel's Q objects with OR logic. Subclasses can override for custom search behavior.
         """
         if search_term and self.search_fields:
-            q_objects = []
+            # Build Q filters for each search field
+            q_filters = []
             for field in self.search_fields:
-                q_objects.append(Q(**{f"{field}__icontains": search_term}))
-            # Combine with OR
-            if q_objects:
-                combined_q = q_objects[0]
-                for q_obj in q_objects[1:]:
-                    combined_q = combined_q | q_obj
+                q_filters.append(Q(**{f"{field}__icontains": search_term}))
+
+            # Combine Q filters using OR logic
+            # NeoModel's Q objects support | operator for OR combination
+            if len(q_filters) == 1:
+                # Single filter - apply directly
+                queryset = queryset.filter(q_filters[0])
+            elif len(q_filters) > 1:
+                # Multiple filters - combine with OR
+                # Start with first filter, then combine with each subsequent one
+                combined_q = q_filters[0]
+                for q_filter in q_filters[1:]:
+                    combined_q = combined_q | q_filter
                 queryset = queryset.filter(combined_q)
         return queryset, False  # False = no distinct needed for NeoModel
