@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from functools import total_ordering
 
 from django.db.models import signals
@@ -160,23 +163,29 @@ class DjangoField(object):
         return first_choice + choices
 
 
+@dataclass
 class Query:
-    select_related = False
-    order_by = ["pk"]
+    """Query object for Django Admin compatibility with NeoModel NodeSets."""
+    select_related: bool = False
+    order_by: list[str] = field(default_factory=lambda: ["pk"])
 
 
 class NeoNodeSet(NodeSet):
-    query = Query()
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.model = self.source
+        # Django Admin expects a query attribute with order_by
+        # Create a new Query instance for this NodeSet to avoid shared state
+        if not hasattr(self, 'query'):
+            self.query = Query()
 
-    def count(self):
+    def count(self) -> int:
+        """Alias for __len__ to provide Django QuerySet-like `.count()`."""
         return len(self)
 
-    def _clone(self):
-        return self
+    def _clone(self) -> NeoNodeSet:
+        """Clone the NodeSet to provide Django QuerySet-like `.clone()`."""
+        return NeoNodeSet(source=self.source)
 
 
 class NeoManager:
