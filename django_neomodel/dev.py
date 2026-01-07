@@ -9,15 +9,11 @@ from abc import ABC, ABCMeta, abstractmethod
 import logging
 
 from django.contrib.admin import ModelAdmin
-from django.contrib.admin.views.main import ChangeList
 
 from django_neomodel import DjangoField, DjangoNode
 
 
-__all__ = [
-    'DjangoNeoNode',
-    'DjangoNeoModelAdmin',
-]
+__all__ = ['DjangoNeoNode', 'DjangoNeoModelAdmin']
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +29,7 @@ class _DjangoNeoNodeMeta(_DjangoNodeMeta, ABCMeta):
     This metaclass combines the metaclass of DjangoNode (from NeoModel) with ABCMeta
     to allow DjangoNeoNode to inherit from both DjangoNode and ABC without metaclass conflicts.
     """
-    pass
+
 
 # ============================================================================
 # Monkey-patches for Django-NeoModel compatibility
@@ -150,113 +146,6 @@ class DjangoNeoNode(DjangoNode, ABC, metaclass=_DjangoNeoNodeMeta):
         # NeoModel doesn't have Django ORM constraints, so this is a no-op
 
 
-class NoPkChangeList(ChangeList):
-    """Custom ChangeList that prevents Django from using 'pk' for NeoModel nodes.
-
-    Django Admin expects Django ORM models with a `pk` field, but NeoModel nodes
-    don't have a Django ORM primary key. This ChangeList handles all the edge cases
-    that arise from this mismatch.
-    """
-
-    def __init__(self, request, model, list_display, list_display_links,
-                 list_filter, date_hierarchy, search_fields, list_select_related,
-                 list_per_page, list_max_show_all, list_editable, model_admin, sortable_by, search_help_text):
-        """Override to handle NeoModel nodes that don't have a Django ORM primary key."""
-        try:
-            logger.info(f"Initializing ChangeList for {model.__name__}")
-
-            # NeoModel nodes don't have a Django ORM primary key field
-            # Create a mock pk object to prevent Django from failing when accessing lookup_opts.pk.attname
-            class MockPk:
-                attname = None
-
-            # Temporarily set lookup_opts.pk if it's None
-            original_pk = None
-            if hasattr(model._meta, 'pk') and model._meta.pk is None:
-                original_pk = model._meta.pk
-                model._meta.pk = MockPk()
-
-            try:
-                super().__init__(
-                    request, model, list_display, list_display_links,
-                    list_filter, date_hierarchy, search_fields, list_select_related,
-                    list_per_page, list_max_show_all, list_editable, model_admin, sortable_by, search_help_text
-                )
-
-                # Set pk_attname to None since NeoModel nodes don't have a pk field
-                self.pk_attname = None
-
-                logger.info(f"ChangeList initialized successfully for {model.__name__}")
-            finally:
-                # Restore original pk if we modified it
-                if original_pk is not None:
-                    model._meta.pk = original_pk
-        except Exception as e:
-            logger.error(f"Exception in ChangeList.__init__ for {model.__name__}: {e}", exc_info=True, stack_info=True)
-            raise
-
-    def get_queryset(self, request):
-        """Override to prevent Django Admin from applying Django ORM filters to NeoModel queryset.
-
-        Django Admin's default get_queryset tries to apply list_filter using Django ORM's .filter(),
-        which doesn't work with NeoModel NodeSets. We bypass that and use the queryset from
-        the ModelAdmin's get_queryset method directly.
-        """
-        try:
-            # Call the ModelAdmin's get_queryset directly, which should return a NodeSet
-            qs = self.model_admin.get_queryset(request)
-            logger.debug(f"ChangeList.get_queryset returning queryset from ModelAdmin: {type(qs)}")
-            return qs
-        except Exception as e:
-            logger.error(f"Exception in NoPkChangeList.get_queryset for {self.model.__name__}: {e}", exc_info=True, stack_info=True)
-            raise
-
-    def _get_deterministic_ordering(self, ordering):
-        """Override to prevent Django from appending 'pk' to ordering."""
-        # Filter out 'pk' and '-pk' from ordering
-        filtered_ordering = tuple(o for o in ordering if o not in ('pk', '-pk'))
-        # Ensure we have at least one ordering field
-        if not filtered_ordering:
-            # Fall back to the model admin's default ordering
-            model_ordering = self.model_admin.ordering or ()
-            if model_ordering:
-                filtered_ordering = model_ordering
-        return filtered_ordering
-
-    def url_for_result(self, result):
-        """Override to handle NeoModel nodes that use pk property instead of pk_attname.
-
-        Django Admin's url_for_result uses getattr(result, self.pk_attname), but
-        when pk_attname is None (for NeoModel nodes), we need to use the pk property instead.
-        Temporarily set pk_attname to 'pk' so the parent method works.
-        """
-        original_pk_attname = self.pk_attname
-        self.pk_attname = 'pk'  # Temporarily set to 'pk' to use the property on NeoModel nodes
-        try:
-            url = super().url_for_result(result)
-        finally:
-            self.pk_attname = original_pk_attname  # Restore original
-        return url
-
-    def get_results(self, request):
-        """Override to handle NeoModel NodeSets.
-
-        Django Admin's get_results() expects a queryset with .count() and ._clone() methods.
-        NodeSet now has these methods and is iterable, so it works directly with Django Admin.
-        """
-        try:
-            logger.info(f"Getting results for ChangeList: {self.model.__name__}")
-            logger.debug(f"root_queryset type: {type(self.root_queryset)}, queryset type: {type(self.queryset)}")
-
-            # NodeSets now have count() and _clone() and are iterable, so they work directly
-            result = super().get_results(request)
-            logger.info(f"Results retrieved successfully for {self.model.__name__}")
-            return result
-        except Exception as e:
-            logger.error(f"Exception in ChangeList.get_results for {self.model.__name__}: {e}", exc_info=True, stack_info=True)
-            raise
-
-
 class DjangoNeoModelAdmin(ModelAdmin):
     """Base ModelAdmin class for NeoModel nodes.
 
@@ -269,18 +158,6 @@ class DjangoNeoModelAdmin(ModelAdmin):
     The default `get_queryset` implementation uses `self.model.objects.all()` which is an alias
     for `self.model.nodes.all()` via the `DjangoNeoNode.objects` descriptor.
     """
-
-    def changelist_view(self, request, extra_context=None):
-        """Override to catch and log exceptions before Django Admin's error handling."""
-        try:
-            return super().changelist_view(request, extra_context)
-        except Exception as e:
-            logger.error(f"Exception in {self.__class__.__name__}.changelist_view: {e}", exc_info=True, stack_info=True)
-            raise
-
-    def get_changelist(self, request, **kwargs):
-        """Override to use custom ChangeList that prevents 'pk' ordering."""
-        return NoPkChangeList
 
     def has_add_permission(self, request):
         """Override to prevent Django from checking database table existence."""
