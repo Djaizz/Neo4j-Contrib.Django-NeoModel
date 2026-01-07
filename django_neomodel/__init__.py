@@ -237,11 +237,35 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
         opts = Options(self.Meta, app_label=self.Meta.app_label)
         opts.contribute_to_class(self, self.__name__)
 
+        # Find the primary key field name
+        pk_field_name = None
         for key, prop in self.__all_properties__:
             opts.add_field(DjangoField(prop, key), getattr(prop, "private", False))
             if getattr(prop, "primary_key", False):
-                self.pk = prop
-                self.pk.auto_created = True
+                pk_field_name = key
+                # Store the property for Django Admin compatibility
+                setattr(self, '_pk_property', prop)
+                prop.auto_created = True
+
+        # Create a proper pk property that returns the actual value
+        if pk_field_name:
+            # Use a closure to capture the field name
+            field_name = pk_field_name
+
+            def pk_getter(instance):
+                """Return the primary key value for this instance."""
+                return getattr(instance, field_name, None)
+
+            # Create a custom property descriptor that supports the 'name' attribute
+            # (Python's built-in property doesn't allow setting arbitrary attributes)
+            class PkProperty(property):
+                """Custom property descriptor that supports a 'name' attribute."""
+                def __init__(self, fget, name):
+                    super().__init__(fget)
+                    self.name = name
+
+            pk_prop = PkProperty(pk_getter, pk_field_name)
+            setattr(self, 'pk', pk_prop)
 
         return opts
 
