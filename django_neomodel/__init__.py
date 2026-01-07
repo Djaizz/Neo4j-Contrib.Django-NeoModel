@@ -11,7 +11,6 @@ from django.db.models.options import Options
 from django.core.exceptions import ValidationError
 
 from neomodel import RequiredProperty, DeflateError, StructuredNode, UniqueIdProperty
-from neomodel.sync_.node import NodeMeta
 from neomodel.sync_.match import NodeSet
 
 
@@ -170,40 +169,6 @@ class Query:
     order_by: list[str] = field(default_factory=lambda: ["pk"])
 
 
-class NeoNodeSet(NodeSet):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.model = self.source
-        # Django Admin expects a query attribute with order_by
-        # Create a new Query instance for this NodeSet to avoid shared state
-        if not hasattr(self, 'query'):
-            self.query = Query()
-
-    def count(self) -> int:
-        """Alias for __len__ to provide Django QuerySet-like `.count()`."""
-        return len(self)
-
-    def _clone(self) -> NeoNodeSet:
-        """Clone the NodeSet to provide Django QuerySet-like `.clone()`."""
-        return NeoNodeSet(source=self.source)
-
-
-class NeoManager:
-    def __init__(self, model):
-        self.model = model
-
-    def get_queryset(self):
-        return NeoNodeSet(self.model)
-
-
-class MetaClass(NodeMeta):
-    def __new__(cls, *args, **kwargs):
-        super_new = super().__new__
-        new_cls = super_new(cls, *args, **kwargs)
-        setattr(new_cls, "_default_manager", NeoManager(new_cls))
-        return new_cls
-
-
 class _ObjectsDescriptor:
     """Descriptor that provides Django-like 'objects' API for NeoModel nodes.
 
@@ -220,7 +185,7 @@ class _ObjectsDescriptor:
         return cls.nodes
 
 
-class DjangoNode(StructuredNode, metaclass=MetaClass):
+class DjangoNode(StructuredNode):
     __abstract_node__ = True
 
     # Class-level descriptor that provides Django-like 'objects' API
