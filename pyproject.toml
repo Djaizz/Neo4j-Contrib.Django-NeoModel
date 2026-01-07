@@ -28,7 +28,7 @@ classifiers = [
 ]
 dependencies = [
     'Django >= 6.0',
-    'NeoModel @ git+https://GitHub.com/Djaizz/Neo4j-Contrib.NeoModel',
+    'NeoModel >= 6.0',
 ]
 version='0.2.0'
 
