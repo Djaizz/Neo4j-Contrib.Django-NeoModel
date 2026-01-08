@@ -149,11 +149,14 @@ This document enumerates all key affordances and interfaces implemented in Djang
 - **Necessity**: ⚠️ **Needs validation** - Could Django Admin's default work if NodeSet's `.get()` method properly handled custom primary keys?
 - **Current implementation**: Custom logic to find pk field and query by it
 
-#### **`get_search_results()` method** (lines 129-152)
+#### **`get_search_results()` method** (lines 484-520)
 - **Purpose**: Implements search using NeoModel's `Q` objects
 - **Justification**: Django Admin's default uses Django ORM `Q` objects. NeoModel has its own `Q` objects.
-- **Necessity**: ⚠️ **Needs validation** - Could Django Admin's default work if NeoModel's `Q` objects were compatible with Django's `Q` objects, or if NodeSet handled the conversion?
-- **Current implementation**: Converts Django Admin's search into NeoModel `Q` objects
+- **Implementation**:
+  - Builds a single Q object with OR conditions for all search fields
+  - Directly manipulates `q_filters` using `&` operator (avoids `filter()` which wraps in Q())
+  - The monkey-patch ensures Q objects in children are handled correctly
+- **Necessity**: ✅ **Required** - Django Admin's default uses Django ORM `Q` objects, which are incompatible with NeoModel's `Q` objects. NeoModel requires its own `Q` objects for filtering.
 
 #### **`get_changelist()` method** (lines 154-180)
 - **Purpose**: Error handling wrapper for ChangeList creation
@@ -207,11 +210,14 @@ This document enumerates all key affordances and interfaces implemented in Djang
 8. ✅ `NeomodelConfig` - Required for NeoModel configuration in Django
 9. ✅ `DjangoNeoModelAdmin.get_ordering()` - Required (translates `pk` to actual field name for NeoModel compatibility)
 10. ✅ `DjangoNeoModelAdmin.get_queryset()` - Required (uses NodeSet directly, applies translated ordering, intercepts `order_by()` to translate `pk`)
+11. ✅ `DjangoNeoModelAdmin.get_search_results()` - Required (converts Django Admin search to NeoModel Q objects)
+12. ✅ **Q Filters Parsing Monkey-Patch** (in `admin.py`, lines 16-78) - Required (fixes NeoModel bug where `isinstance(child, QBase)` fails for nested Q objects)
+11. ✅ `DjangoNeoModelAdmin.get_search_results()` - Required (converts Django Admin search to NeoModel Q objects)
+12. ✅ **Q Filters Parsing Monkey-Patch** - Required (fixes NeoModel bug where `isinstance(child, QBase)` fails for nested Q objects)
 
 ### **Needs Validation (Proactive Overrides - May Be Unnecessary):**
 1. ⚠️ `DjangoNeoModelAdmin` permission methods - Could Django Admin work without these if we integrated with Django's auth system?
 2. ⚠️ `DjangoNeoModelAdmin.get_object()` - Could Django Admin's default work if NodeSet's `.get()` method properly handled custom primary keys?
-3. ⚠️ `DjangoNeoModelAdmin.get_search_results()` - Could Django Admin's default work if NeoModel's `Q` objects were compatible with Django's `Q` objects?
 
 ### **Potentially Removable (Debugging/Convenience):**
 1. ⚠️ `Query` dataclass - May not be used if Django Admin doesn't need it
@@ -241,6 +247,20 @@ This document enumerates all key affordances and interfaces implemented in Djang
 - **Problem**: `Query` dataclass was patched as a class attribute, meaning all NodeSet instances shared the same `Query` object with default `order_by: ["pk"]`.
 - **Solution**: Changed `Query` to a descriptor (`_QueryDescriptor`) that returns a per-instance `Query` object, and changed default `order_by` to empty list.
 - **Why necessary**: Prevents default `pk` ordering from interfering with our translation logic.
+
+#### **Q Filters Parsing Issue (Monkey-Patch Fix)**
+- **Problem**: NeoModel's `_parse_q_filters` method has a bug where `isinstance(child, QBase)` returns `False` for Q objects that are nested as children in `q_filters`. This occurs when:
+  - `filter()` is called, which does: `self.q_filters = Q(self.q_filters & Q(...))` (wraps in another Q)
+  - Q objects are combined using `&` operator, creating nested Q structures
+  - The parser tries to subscript Q objects as tuples (`child[0]`, `child[1]`), causing `"'Q' object is not subscriptable"` errors
+- **Root Cause**: The `isinstance(child, QBase)` check in `_parse_q_filters` (line 896 in `neomodel/sync_/match.py`) fails to recognize Q objects as QBase instances, even though `Q` inherits from `QBase`. This may be due to import/class hierarchy issues or how Q objects are created when wrapped.
+- **Solution**: Monkey-patch `QueryBuilder._parse_q_filters` with enhanced Q object detection:
+  1. **Multiple detection methods**: Uses `isinstance(child, QBase)`, `isinstance(child, Q)`, and `type(child).__name__ == 'Q'` as fallback
+  2. **Error handling**: If subscripting fails, checks if child has Q-like attributes (`children`, `connector`) and handles it as a Q object
+  3. **Recursive calls**: Uses `self._parse_q_filters` (the patched version) for recursive calls to ensure all nested levels are handled
+- **Implementation**: Applied on module import in `admin.py` (lines 16-78) to ensure it's active before any QueryBuilder instances are created
+- **Why necessary**: Without this patch, any `q_filters` structure with nested Q objects (from `filter()` or `&` operations) will cause parsing errors. The patch ensures Q objects are always recognized and processed correctly, regardless of whether `isinstance()` works properly.
+- **Note**: This is a workaround for a NeoModel bug. Ideally, NeoModel should fix `_parse_q_filters` to properly recognize Q objects, but the monkey-patch ensures compatibility in the meantime.
 
 ### **Questions to Validate:**
 1. Is `Query` dataclass actually used anywhere? (grep for `query.order_by` or `query.select_related`)

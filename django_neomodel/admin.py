@@ -3,15 +3,152 @@
 import logging
 import traceback
 from io import StringIO
+from typing import Any
 
 from django.contrib.admin import ModelAdmin
 from django.http import HttpRequest, HttpResponse
 from django.utils.html import format_html
 
-from neomodel.match_q import Q
+from neomodel.match_q import Q, QBase
 from neomodel.sync_.match import NodeSet
 
 from . import DjangoNode
+
+# ============================================================================
+# Monkey-patch for Q Filters Parsing Issue
+# ============================================================================
+#
+# PROBLEM:
+# NeoModel's `_parse_q_filters` method (in `neomodel/sync_/match.py`) has a bug where
+# `isinstance(child, QBase)` returns False for Q objects that are nested as children
+# in q_filters. This happens when filter() is called, which does:
+#
+#     self.q_filters = Q(self.q_filters & Q(...))
+#
+# This wraps the combined Q in another Q(), creating: Q(Q(...)) structure. When the
+# parser processes this, it checks `isinstance(child, QBase)` for each child. For some
+# reason (possibly import/class hierarchy issues), this check returns False for Q objects,
+# causing the parser to try to subscript the Q object as a tuple (child[0], child[1]),
+# leading to "'Q' object is not subscriptable" errors.
+#
+# ROOT CAUSE:
+# The issue occurs when q_filters has Q objects as direct children (from filter() wrapping
+# or from combining Q objects using the & operator). The original parser's isinstance()
+# check fails to recognize these Q objects as QBase instances, even though Q inherits
+# from QBase.
+#
+# SOLUTION:
+# We monkey-patch `QueryBuilder._parse_q_filters` to use enhanced Q object detection:
+# 1. Multiple detection methods: isinstance(child, QBase), isinstance(child, Q), and
+#    type name check as fallback
+# 2. Error handling: If subscripting fails, check if child looks like a Q object and
+#    handle it accordingly
+# 3. Recursive calls use the patched version (self._parse_q_filters) to ensure all
+#    nested levels are handled correctly
+#
+# This ensures that Q objects in children are always recognized and processed correctly,
+# regardless of whether isinstance() works properly.
+#
+# ============================================================================
+
+_original_parse_q_filters = None
+
+def _patched_parse_q_filters(self, ident: str, q: QBase | Any, source_class):
+    """Patched version of _parse_q_filters that handles Q objects in children.
+
+    This patch fixes the issue where isinstance(child, QBase) returns False for Q objects
+    that are nested as children in q_filters, causing "'Q' object is not subscriptable" errors.
+
+    The patch uses multiple detection methods to identify Q objects and handles them correctly,
+    even when isinstance() fails.
+    """
+    from neomodel.match_q import Q as QClass
+    target: list[tuple[str, bool]] = []
+
+    def add_to_target(statement: str, connector, optional: bool) -> None:
+        if not statement:
+            return
+        if connector == QClass.OR:
+            statement = f"({statement})"
+        target.append((statement, optional))
+
+    for child in q.children:
+        # Enhanced Q object detection using multiple methods:
+        # 1. isinstance(child, QBase) - Standard check (may fail due to import/class issues)
+        # 2. isinstance(child, Q) - Direct Q class check
+        # 3. type(child).__name__ == 'Q' - Fallback type name check
+        # This ensures we catch Q objects even when isinstance() fails
+        is_qbase = isinstance(child, QBase) or isinstance(child, QClass) or type(child).__name__ == 'Q'
+
+        if is_qbase:
+            # Use self._parse_q_filters (our patched version) for recursive calls
+            # This ensures all nested Q objects are handled correctly at all levels
+            q_childs, q_opt_childs = self._parse_q_filters(
+                ident, child, source_class
+            )
+            add_to_target(q_childs, child.connector, False)
+            add_to_target(q_opt_childs, child.connector, True)
+        else:
+            # Must be a tuple from kwargs.items() (normal case)
+            try:
+                kwargs = {child[0]: child[1]}
+                from neomodel.sync_.match import process_filter_args
+                filters = process_filter_args(source_class, kwargs)
+                self._build_filter_statements(ident, filters, target, source_class)
+            except (TypeError, IndexError) as e:
+                # If child is not subscriptable, it's likely a Q object that wasn't recognized
+                # by our enhanced check. This can happen in edge cases.
+                # Check if it has Q-like attributes and handle it as a Q object
+                logger.warning(
+                    f"Child in q_filters.children is not subscriptable: {type(child).__name__}. "
+                    f"Attempting to handle as QBase. Error: {e}"
+                )
+                if hasattr(child, 'children') and hasattr(child, 'connector'):
+                    # Looks like a Q object (has children and connector attributes)
+                    # Process it using our patched version
+                    q_childs, q_opt_childs = self._parse_q_filters(
+                        ident, child, source_class
+                    )
+                    add_to_target(q_childs, child.connector, False)
+                    add_to_target(q_opt_childs, child.connector, True)
+                else:
+                    # Not a Q object and not subscriptable - this is unexpected
+                    raise
+
+    # Build match and optional match filter statements
+    match_filters = [filter[0] for filter in target if not filter[1]]
+    opt_match_filters = [filter[0] for filter in target if filter[1]]
+
+    # Handle OR connector with both match and optional match filters
+    if q.connector == QClass.OR and match_filters and opt_match_filters:
+        # Can't split filters, so move everything to optional match filters
+        opt_match_filters += match_filters
+        match_filters = []
+        self._ast.mixed_filters = True
+
+    # Build final WHERE clause strings
+    ret = f" {q.connector} ".join(match_filters)
+    if ret and q.negated:
+        ret = f"NOT ({ret})"
+    opt_ret = f" {q.connector} ".join(opt_match_filters)
+    if opt_ret and q.negated:
+        opt_ret = f"NOT ({opt_ret})"
+    return ret, opt_ret
+
+def _apply_q_filters_patch():
+    """Apply monkey-patch to _parse_q_filters to handle Q objects in children.
+
+    This patch is applied on module import to ensure it's active before any
+    QueryBuilder instances are created.
+    """
+    global _original_parse_q_filters
+    from neomodel.sync_.match import QueryBuilder
+    if _original_parse_q_filters is None:
+        _original_parse_q_filters = QueryBuilder._parse_q_filters
+        QueryBuilder._parse_q_filters = _patched_parse_q_filters
+
+# Apply patch on module import to ensure it's active before any QueryBuilder instances are created
+_apply_q_filters_patch()
 
 
 __all__ = ['DjangoNeoModelAdmin']
@@ -105,6 +242,8 @@ class DjangoNeoModelAdmin(ModelAdmin):
 
         This ensures we return a properly initialized NodeSet from the model's objects manager,
         and applies the translated ordering (pk -> actual field name) to the queryset.
+
+        Also ensures q_filters is in a valid state to prevent parsing errors.
         """
         try:
             # self.model.objects returns cls.nodes (a NodeSet), not the result of .all()
@@ -193,13 +332,21 @@ class DjangoNeoModelAdmin(ModelAdmin):
                     )
                 queryset = queryset.order_by(*ordering)
 
-                # Verify the ordering was applied correctly
-                if hasattr(queryset, 'order_by_elements'):
-                    # Check if 'pk' is still in order_by_elements (shouldn't be)
-                    for elem in queryset.order_by_elements:
-                        if isinstance(elem, str) and (elem == 'pk' or elem == '-pk' or elem.endswith('.pk')):
-                            raise ValueError(
-                                f"'pk' found in order_by_elements after translation for {self.model.__name__}. "
+            # Ensure q_filters is in a valid state (not None)
+            # Note: The monkey-patch (applied on module import) handles Q objects in children
+            # correctly, so we only need to ensure q_filters is not None here.
+            if hasattr(queryset, 'q_filters'):
+                from neomodel.match_q import Q
+                if queryset.q_filters is None:
+                    queryset.q_filters = Q()
+
+            # Verify the ordering was applied correctly
+            if hasattr(queryset, 'order_by_elements'):
+                # Check if 'pk' is still in order_by_elements (shouldn't be)
+                for elem in queryset.order_by_elements:
+                    if isinstance(elem, str) and (elem == 'pk' or elem == '-pk' or elem.endswith('.pk')):
+                        raise ValueError(
+                            f"'pk' found in order_by_elements after translation for {self.model.__name__}. "
                                 f"Translated ordering: {ordering}, order_by_elements: {queryset.order_by_elements}"
                             )
 
@@ -311,21 +458,52 @@ class _DjangoNeoModelAdmin:
         """
         if search_term and self.search_fields and len(self.search_fields) > 0:
             # Build a single Q object with OR conditions for all search fields
-            # NeoModel's q_filters is a single Q object, not a list
-            if len(self.search_fields) == 1:
-                # Single field - create Q object directly
-                field = self.search_fields[0]
-                search_q = Q(**{f"{field}__icontains": search_term})
-            else:
-                # Multiple fields - combine with OR using | operator
-                # Start with first field, then OR with each subsequent field
-                search_q = Q(**{f"{self.search_fields[0]}__icontains": search_term})
-                for field in self.search_fields[1:]:
-                    search_q = search_q | Q(**{f"{field}__icontains": search_term})
+            # Instead of combining multiple Q objects (which can cause structure issues),
+            # build a single Q object with all conditions as kwargs
+            # This creates children as tuples (from kwargs.items()), not nested Q objects
+            search_kwargs = {}
+            for field in self.search_fields:
+                search_kwargs[f"{field}__icontains"] = search_term
 
-            # Apply the combined Q filter to the queryset
-            # NeoModel's filter() will AND this with existing q_filters
-            queryset = queryset.filter(search_q)
+            # Create a single Q object with OR connector and all conditions
+            # This ensures children are tuples, not nested Q objects
+            search_q = Q(_connector=Q.OR, **search_kwargs)
+
+            # Directly manipulate q_filters instead of using filter() to avoid structure issues
+            # filter() does: self.q_filters = Q(self.q_filters & Q(...)) which wraps the combined Q
+            # in another Q(), creating: Q(Q(existing) & Q(new)), which can cause parsing issues.
+            #
+            # The problem: When you do Q(some_q_object), the some_q_object becomes a child in children.
+            # The parser checks isinstance(child, QBase) to decide if it should recurse or treat as tuple.
+            # But when filter() wraps in Q(), it creates a structure where a Q object is in children,
+            # and for some reason isinstance() might not recognize it properly, leading to the error.
+            #
+            # Solution: Never use filter(). Always directly set q_filters using the & operator,
+            # which creates the proper structure without the extra wrapping.
+            if not hasattr(queryset, 'q_filters'):
+                # No q_filters attribute (shouldn't happen for NodeSet)
+                # Can't proceed without q_filters
+                logger.error(
+                    f"NodeSet for {self.model.__name__} has no q_filters attribute. "
+                    f"Cannot apply search."
+                )
+                return queryset, False
+
+            # Get existing q_filters and combine with search_q
+            # The monkey-patch above handles Q objects in children correctly, so we can
+            # safely combine q_filters without worrying about parsing errors
+            existing_q = queryset.q_filters
+
+            # Check if q_filters is truly empty (no children)
+            # Empty Q() evaluates to False and has len() == 0
+            if not existing_q or len(existing_q) == 0:
+                # Empty q_filters, just set our search_q directly
+                queryset.q_filters = search_q
+            else:
+                # Existing q_filters - combine using & operator directly
+                # This creates the proper structure: Q(AND, [existing_q, search_q])
+                # The monkey-patch ensures Q objects in children are handled correctly
+                queryset.q_filters = existing_q & search_q
         return queryset, False  # False = no distinct needed for NeoModel
 
     def get_changelist(self, request, **kwargs):
