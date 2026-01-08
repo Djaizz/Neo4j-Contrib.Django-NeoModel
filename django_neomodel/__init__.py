@@ -11,7 +11,6 @@ from django.db.models.options import Options
 from django.core.exceptions import ValidationError
 
 from neomodel import RequiredProperty, DeflateError, StructuredNode, UniqueIdProperty
-from neomodel.sync_.match import NodeSet
 
 
 __author__ = "Robin Edwards"
