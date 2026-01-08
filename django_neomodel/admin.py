@@ -9,6 +9,7 @@ from django.http import HttpRequest, HttpResponse
 from django.utils.html import format_html
 
 from neomodel.match_q import Q
+from neomodel.sync_.match import NodeSet
 
 from . import DjangoNode
 
@@ -67,22 +68,179 @@ class DjangoNeoModelAdmin(ModelAdmin):
         """Return True if the given request has permission to delete the given model instance."""
         return True
 
+    def get_ordering(self, request):
+        """Return the ordering for the changelist, translating 'pk' to actual primary key field.
 
-class _DjangoNeoModelAdmin:
-    """Private class for methods that need validation.
+        Django Admin may try to order by 'pk', but NeoModel doesn't recognize 'pk' as a property.
+        This method translates 'pk' to the actual primary key field name (e.g., 'label').
+        """
+        ordering = super().get_ordering(request)
 
-    Methods moved here are proactive overrides that may be unnecessary
-    if underlying incompatibilities are fixed at the NodeSet/DjangoNode level.
-    """
+        # Get the actual primary key field name from model._meta.pk.name
+        # (set by DjangoNode._meta when creating the pk property)
+        pk_field_name = getattr(self.model._meta.pk, 'name', None)
+
+        if not pk_field_name:
+            # If we can't find the primary key field, return empty ordering to avoid errors
+            return []
+
+        # If no ordering specified, default to ordering by primary key
+        if not ordering:
+            ordering = ['pk']
+
+        # Translate 'pk' to actual primary key field name
+        translated_ordering = []
+        for field in ordering:
+            if field == 'pk' or field == '-pk':
+                # Translate to actual field name, preserving the '-' prefix
+                translated_field = f"-{pk_field_name}" if field.startswith('-') else pk_field_name
+                translated_ordering.append(translated_field)
+            else:
+                translated_ordering.append(field)
+
+        return translated_ordering
 
     def get_queryset(self, request):
-        """Return a queryset for use in Django Admin.
+        """Return a queryset for use in Django Admin with translated ordering.
 
-        This ensures we return a properly initialized NodeSet from the model's objects manager.
-        Override to catch errors during queryset creation.
+        This ensures we return a properly initialized NodeSet from the model's objects manager,
+        and applies the translated ordering (pk -> actual field name) to the queryset.
         """
         try:
-            return self.model.objects.all()
+            # self.model.objects returns cls.nodes (a NodeSet), not the result of .all()
+            # We use the NodeSet directly, not .all() which returns a list
+            queryset = self.model.objects
+
+            # Ensure we have a NodeSet
+            if not isinstance(queryset, NodeSet):
+                # This should never happen if _ObjectsDescriptor is working correctly
+                raise TypeError(
+                    f"Expected NodeSet but got {type(queryset).__name__} for {self.model.__name__}. "
+                    f"self.model.objects type: {type(self.model.objects).__name__}"
+                )
+
+            # Wrap the NodeSet's order_by method to automatically translate 'pk'
+            # This ensures that even if Django Admin applies ordering later, 'pk' will be translated
+            # We also need to handle clones, so we store the wrapper info on the instance
+            pk_field_name = getattr(self.model._meta.pk, 'name', None)
+            if pk_field_name:
+                # Store the original order_by and pk_field_name on the instance
+                # so clones can also use the wrapper
+                if not hasattr(queryset, '_original_order_by'):
+                    queryset._original_order_by = queryset.order_by
+                    queryset._pk_field_name = pk_field_name
+
+                # Create a closure that captures pk_field_name
+                def make_translated_order_by(node_set, original_order_by, pk_field):
+                    """Create a wrapper function that translates 'pk' to actual field name."""
+                    def translated_order_by(*props):
+                        """Wrapper that translates 'pk' to actual field name before calling order_by."""
+                        translated_props = []
+                        for prop in props:
+                            if isinstance(prop, str):
+                                if prop == 'pk':
+                                    translated_props.append(pk_field)
+                                elif prop == '-pk':
+                                    translated_props.append(f"-{pk_field}")
+                                elif prop.startswith('-') and prop[1:] == 'pk':
+                                    translated_props.append(f"-{pk_field}")
+                                elif 'pk' in prop:
+                                    # Handle cases like "pk DESC" or similar
+                                    translated_props.append(prop.replace('pk', pk_field))
+                                else:
+                                    translated_props.append(prop)
+                            else:
+                                translated_props.append(prop)
+                        result = original_order_by(*translated_props)
+                        # Ensure the wrapper is also applied to the result (in case order_by returns a new NodeSet)
+                        if isinstance(result, NodeSet) and not hasattr(result, '_original_order_by'):
+                            result._original_order_by = original_order_by
+                            result._pk_field_name = pk_field
+                            result.order_by = make_translated_order_by(result, original_order_by, pk_field)
+                        return result
+                    return translated_order_by
+
+                queryset.order_by = make_translated_order_by(queryset, queryset._original_order_by, pk_field_name)
+
+            # Get the translated ordering from get_ordering()
+            # This will have already translated 'pk' to the actual field name
+            ordering = self.get_ordering(request)
+
+            # Debug: Log the ordering to verify translation
+            if ordering and any('pk' in str(field) for field in ordering):
+                logger.warning(
+                    f"get_ordering() returned ordering with 'pk' for {self.model.__name__}: {ordering}. "
+                    f"This should have been translated!"
+                )
+
+            # Clear any existing ordering first (in case Query.order_by default is set)
+            # NodeSet.order_by() with no args clears ordering, but we'll apply our own
+            if hasattr(queryset, 'order_by_elements'):
+                queryset.order_by_elements = []
+
+            # Also clear/update the Query.order_by if it exists
+            if hasattr(queryset, 'query') and hasattr(queryset.query, 'order_by'):
+                queryset.query.order_by = ordering if ordering else []
+
+            # Apply the translated ordering to the queryset
+            # NodeSet.order_by() accepts field names as strings
+            if ordering:
+                # Ensure no 'pk' in ordering before applying
+                if any('pk' in str(field) for field in ordering):
+                    raise ValueError(
+                        f"Ordering contains 'pk' after translation for {self.model.__name__}: {ordering}. "
+                        f"This should have been translated to the actual primary key field name."
+                    )
+                queryset = queryset.order_by(*ordering)
+
+                # Verify the ordering was applied correctly
+                if hasattr(queryset, 'order_by_elements'):
+                    # Check if 'pk' is still in order_by_elements (shouldn't be)
+                    for elem in queryset.order_by_elements:
+                        if isinstance(elem, str) and (elem == 'pk' or elem == '-pk' or elem.endswith('.pk')):
+                            raise ValueError(
+                                f"'pk' found in order_by_elements after translation for {self.model.__name__}. "
+                                f"Translated ordering: {ordering}, order_by_elements: {queryset.order_by_elements}"
+                            )
+
+            # IMPORTANT: Ensure order_by_elements doesn't contain 'pk' before returning
+            # Django Admin's ChangeList might clone the queryset, so we need to ensure
+            # the ordering is correct at this point
+            if hasattr(queryset, 'order_by_elements'):
+                # Double-check that no 'pk' slipped through and fix it
+                pk_field_name = getattr(self.model._meta.pk, 'name', None)
+                if pk_field_name:
+                    # Create a new list with translated elements
+                    translated_elements = []
+                    for elem in queryset.order_by_elements:
+                        if isinstance(elem, str):
+                            if elem == 'pk':
+                                translated_elements.append(pk_field_name)
+                            elif elem == '-pk':
+                                translated_elements.append(f"-{pk_field_name}")
+                            elif elem.endswith('.pk'):
+                                translated_elements.append(elem.replace('.pk', f'.{pk_field_name}'))
+                            elif 'pk' in elem:
+                                # Handle cases like "pk DESC" or similar
+                                translated_elements.append(elem.replace('pk', pk_field_name))
+                            else:
+                                translated_elements.append(elem)
+                        else:
+                            translated_elements.append(elem)
+                    queryset.order_by_elements = translated_elements
+                else:
+                    # Can't translate, remove any 'pk' elements
+                    queryset.order_by_elements = [
+                        elem for elem in queryset.order_by_elements
+                        if not (isinstance(elem, str) and ('pk' in elem))
+                    ]
+                    if queryset.order_by_elements != list(queryset.order_by_elements):
+                        logger.warning(
+                            f"Removed 'pk' from order_by_elements for {self.model.__name__} "
+                            f"because primary key field name could not be determined"
+                        )
+
+            return queryset
         except Exception as e:
             # Log the full error with traceback
             logger.error(
@@ -103,6 +261,14 @@ class _DjangoNeoModelAdmin:
             print("=" * 80, file=sys.stderr)
             # Re-raise to show actual error
             raise
+
+
+class _DjangoNeoModelAdmin:
+    """Private class for methods that need validation.
+
+    Methods moved here are proactive overrides that may be unnecessary
+    if underlying incompatibilities are fixed at the NodeSet/DjangoNode level.
+    """
 
     def get_object(self, request, object_id, from_field=None):
         """Override to handle NeoModel nodes that use custom unique identifiers as pk.

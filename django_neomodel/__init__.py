@@ -169,10 +169,21 @@ class DjangoField(object):
 class Query:
     """Query object for Django Admin compatibility with NeoModel NodeSets."""
     select_related: bool = False
-    order_by: list[str] = field(default_factory=lambda: ["pk"])
+    order_by: list[str] = field(default_factory=list)  # Empty by default - ordering will be set by get_queryset()
 
 
-NodeSet.query = Query()
+# Create a descriptor that returns a Query instance per NodeSet instance
+# This ensures each NodeSet has its own Query object, not a shared one
+class _QueryDescriptor:
+    """Descriptor that provides a Query instance per NodeSet instance."""
+    def __get__(self, obj, cls=None):
+        if obj is None:
+            return Query()
+        if not hasattr(obj, '_django_query'):
+            obj._django_query = Query()
+        return obj._django_query
+
+NodeSet.query = _QueryDescriptor()
 
 
 class NeoManager:

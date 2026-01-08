@@ -117,11 +117,31 @@ This document enumerates all key affordances and interfaces implemented in Djang
 - **Necessity**: ✅ **Required** for Django Admin to display pages
 - **Validation needed**: ⚠️ Could Django Admin work without these if we integrated with Django's auth system?
 
-#### **`get_queryset()` method** (lines 67-94)
-- **Purpose**: Returns NodeSet from `model.objects.all()` with error handling
-- **Justification**: Django Admin expects a queryset; converts NeoModel NodeSet
-- **Necessity**: ⚠️ **Needs validation** - Could Django Admin work with `model.objects.all()` directly if NodeSet fully implements Django QuerySet interface?
-- **Current implementation**: Includes error handling wrapper (debugging code)
+#### **`get_ordering()` method** (lines 71-101)
+- **Purpose**: Translates `pk` to actual primary key field name (e.g., `label`) for NeoModel compatibility
+- **Justification**: Django Admin uses `pk` for ordering, but NeoModel doesn't recognize `pk` as a property. NeoModel requires the actual property name (e.g., `label`).
+- **Implementation**:
+  - Gets primary key field name from `model._meta.pk.name`
+  - Translates `'pk'` and `'-pk'` to actual field names
+  - Returns translated ordering list
+- **Necessity**: ✅ **Required** - NeoModel's query builder validates property names and will raise `ValueError` if `pk` is used
+
+#### **`get_queryset()` method** (lines 103-200)
+- **Purpose**: Returns NodeSet with translated ordering and intercepts `order_by()` calls to translate `pk`
+- **Justification**:
+  - Django Admin expects a queryset; `model.objects` returns a NodeSet (not `model.objects.all()` which returns a list)
+  - Must apply translated ordering from `get_ordering()`
+  - Must wrap `order_by()` to intercept any `pk` usage (Django Admin may apply ordering after `get_queryset()` returns)
+- **Key features**:
+  - Uses `model.objects` directly (NodeSet), not `model.objects.all()` (list)
+  - Applies translated ordering from `get_ordering()`
+  - Wraps NodeSet's `order_by()` method to automatically translate `pk` to actual field name
+  - Ensures wrapper is applied to cloned NodeSets (when `order_by()` returns a new NodeSet)
+  - Safety check: Cleans `order_by_elements` to remove any `pk` that slipped through
+- **Necessity**: ✅ **Required** -
+  - Must use NodeSet directly (not `.all()` which returns a list)
+  - Must translate `pk` before NeoModel's query builder validates properties
+  - Must intercept `order_by()` because Django Admin may apply ordering after `get_queryset()` returns
 
 #### **`get_object()` method** (lines 96-127)
 - **Purpose**: Retrieves single object by primary key
@@ -185,18 +205,42 @@ This document enumerates all key affordances and interfaces implemented in Djang
 6. ✅ Django Signals Integration - Required (if Django apps depend on signals)
 7. ✅ `DjangoField.empty_values` class attribute - Required (Django's `display_for_field()` accesses this)
 8. ✅ `NeomodelConfig` - Required for NeoModel configuration in Django
+9. ✅ `DjangoNeoModelAdmin.get_ordering()` - Required (translates `pk` to actual field name for NeoModel compatibility)
+10. ✅ `DjangoNeoModelAdmin.get_queryset()` - Required (uses NodeSet directly, applies translated ordering, intercepts `order_by()` to translate `pk`)
 
 ### **Needs Validation (Proactive Overrides - May Be Unnecessary):**
 1. ⚠️ `DjangoNeoModelAdmin` permission methods - Could Django Admin work without these if we integrated with Django's auth system?
-2. ⚠️ `DjangoNeoModelAdmin.get_queryset()` - Could Django Admin work with `model.objects.all()` directly if NodeSet fully implements Django QuerySet interface?
-3. ⚠️ `DjangoNeoModelAdmin.get_object()` - Could Django Admin's default work if NodeSet's `.get()` method properly handled custom primary keys?
-4. ⚠️ `DjangoNeoModelAdmin.get_search_results()` - Could Django Admin's default work if NeoModel's `Q` objects were compatible with Django's `Q` objects?
+2. ⚠️ `DjangoNeoModelAdmin.get_object()` - Could Django Admin's default work if NodeSet's `.get()` method properly handled custom primary keys?
+3. ⚠️ `DjangoNeoModelAdmin.get_search_results()` - Could Django Admin's default work if NeoModel's `Q` objects were compatible with Django's `Q` objects?
 
 ### **Potentially Removable (Debugging/Convenience):**
 1. ⚠️ `Query` dataclass - May not be used if Django Admin doesn't need it
 2. ⚠️ `DjangoNeoModelAdmin.get_changelist()` - Debugging helper
 3. ⚠️ `DjangoNeoModelAdmin.changelist_view()` - Debugging helper
 4. ⚠️ Management commands - Convenience features
+
+### **Key Intercepts and Overrides:**
+
+#### **Primary Key (`pk`) Translation Intercept**
+- **Problem**: Django Admin uses `pk` for ordering, but NeoModel doesn't recognize `pk` as a property. NeoModel requires the actual property name (e.g., `label`).
+- **Solution**: Multi-layered intercept strategy:
+  1. **`get_ordering()` override**: Translates `pk` → actual field name when Django Admin requests ordering
+  2. **`get_queryset()` override**:
+     - Applies translated ordering from `get_ordering()`
+     - Wraps NodeSet's `order_by()` method to intercept any `pk` usage
+     - Ensures wrapper propagates to cloned NodeSets
+  3. **Safety check**: Cleans `order_by_elements` before returning queryset to catch any `pk` that slipped through
+- **Why necessary**: NeoModel's query builder validates property names at query build time (line 545 in `neomodel/sync_/match.py`), raising `ValueError` if `pk` is used. Django Admin may apply ordering after `get_queryset()` returns, so we must intercept at the `order_by()` level.
+
+#### **NodeSet vs List Distinction**
+- **Problem**: `model.objects.all()` returns a `list`, not a `NodeSet`. Django Admin expects a queryset-like object.
+- **Solution**: Use `model.objects` directly (which is a NodeSet via `_ObjectsDescriptor`), not `model.objects.all()`.
+- **Why necessary**: Django Admin's ChangeList and paginator expect a queryset-like object with methods like `count()`, `order_by()`, etc. A `list` doesn't have these methods.
+
+#### **Query Descriptor Pattern**
+- **Problem**: `Query` dataclass was patched as a class attribute, meaning all NodeSet instances shared the same `Query` object with default `order_by: ["pk"]`.
+- **Solution**: Changed `Query` to a descriptor (`_QueryDescriptor`) that returns a per-instance `Query` object, and changed default `order_by` to empty list.
+- **Why necessary**: Prevents default `pk` ordering from interfering with our translation logic.
 
 ### **Questions to Validate:**
 1. Is `Query` dataclass actually used anywhere? (grep for `query.order_by` or `query.select_related`)
