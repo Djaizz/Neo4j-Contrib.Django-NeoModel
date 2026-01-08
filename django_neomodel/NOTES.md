@@ -28,7 +28,21 @@ This document enumerates all key affordances and interfaces implemented in Djang
 - **Justification**: Django Admin and Django code expect `.objects` manager. NeoModel uses `.nodes`.
 - **Necessity**: ✅ **Required** for Django Admin compatibility and Django-like API
 
-### 4. **`DjangoNode` class** (lines 187-314)
+### 4. **`NeoManager` class** (lines 186-198)
+- **Purpose**: Django-style manager wrapper for NeoModel nodes that provides `get_queryset()` method
+- **Justification**: Django Admin expects models to have `_default_manager` attribute pointing to a manager-like object with `get_queryset()`. This wrapper provides that interface.
+- **Key methods**:
+  - `__init__(model)` - Initializes manager with the model class
+  - `get_queryset()` - Returns a `NodeSet` for the model
+- **Necessity**: ✅ **Required** for Django Admin compatibility (Django Admin accesses `_default_manager`)
+
+### 5. **`MetaClass` class** (lines 201-213)
+- **Purpose**: Metaclass that extends NeoModel's `NodeMeta` to automatically set `_default_manager` on DjangoNode subclasses
+- **Justification**: Django Admin expects models to have `_default_manager` attribute. This metaclass ensures it's set during class creation, before Django Admin tries to access it.
+- **Implementation**: Extends `NodeMeta` and sets `_default_manager = NeoManager(new_cls)` in `__new__()`
+- **Necessity**: ✅ **Required** for Django Admin compatibility (sets `_default_manager` at class creation time)
+
+### 6. **`DjangoNode` class** (lines 216-344)
 - **Purpose**: Base class for NeoModel nodes with Django integration
 - **Justification**: Bridges NeoModel and Django expectations
 
@@ -74,12 +88,12 @@ This document enumerates all key affordances and interfaces implemented in Djang
 - **Justification**: Django Admin calls this for serialization
 - **Necessity**: ✅ **Required** for Django Admin
 
-### 5. **`classproperty` decorator** (lines 26-34)
+### 7. **`classproperty` decorator** (lines 26-34)
 - **Purpose**: Creates class-level properties (like `_meta`)
 - **Justification**: `_meta` needs to be a class property, not an instance property
 - **Necessity**: ✅ **Required** for `_meta` implementation
 
-### 6. **`DjangoNode.serializable_value()` method** (in `DjangoNode` class, lines 306-310)
+### 8. **`DjangoNode.serializable_value()` method** (in `DjangoNode` class, lines 336-342)
 - **Purpose**: Handles `None` field names (Django Admin sometimes passes `None`)
 - **Justification**: Django Admin sometimes calls `serializable_value(None)`, which causes `TypeError`
 - **Necessity**: ✅ **Required** to prevent crashes in Django Admin
@@ -166,9 +180,11 @@ This document enumerates all key affordances and interfaces implemented in Djang
 1. ✅ `DjangoField` - Required for Django Admin/forms (Django accesses field attributes)
 2. ✅ `DjangoNode` with `_meta`, `full_clean()`, `validate_unique()`, `validate_constraints()`, `serializable_value()` - Required (Django calls these methods)
 3. ✅ `_ObjectsDescriptor` / `.objects` - Required (Django Admin expects `Model.objects.all()`)
-4. ✅ Django Signals Integration - Required (if Django apps depend on signals)
-5. ✅ `DjangoField.empty_values` class attribute - Required (Django's `display_for_field()` accesses this)
-6. ✅ `NeomodelConfig` - Required for NeoModel configuration in Django
+4. ✅ `NeoManager` - Required (Django Admin expects `_default_manager` with `get_queryset()` method)
+5. ✅ `MetaClass` - Required (sets `_default_manager` during class creation for Django Admin compatibility)
+6. ✅ Django Signals Integration - Required (if Django apps depend on signals)
+7. ✅ `DjangoField.empty_values` class attribute - Required (Django's `display_for_field()` accesses this)
+8. ✅ `NeomodelConfig` - Required for NeoModel configuration in Django
 
 ### **Needs Validation (Proactive Overrides - May Be Unnecessary):**
 1. ⚠️ `DjangoNeoModelAdmin` permission methods - Could Django Admin work without these if we integrated with Django's auth system?

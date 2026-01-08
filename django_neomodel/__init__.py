@@ -11,6 +11,8 @@ from django.db.models.options import Options
 from django.core.exceptions import ValidationError
 
 from neomodel import RequiredProperty, DeflateError, StructuredNode, UniqueIdProperty
+from neomodel.sync_.node import NodeMeta
+from neomodel.sync_.match import NodeSet
 
 
 __author__ = "Robin Edwards"
@@ -185,7 +187,38 @@ class _ObjectsDescriptor:
         return cls.nodes
 
 
-class DjangoNode(StructuredNode):
+class NeoManager:
+    """Django-style manager wrapper for NeoModel nodes.
+
+    Provides a Django Manager-like interface that wraps NeoModel's NodeSet.
+    This is used to set _default_manager on DjangoNode classes for Django Admin compatibility.
+    """
+
+    def __init__(self, model):
+        """Initialize the manager with the model class."""
+        self.model = model
+
+    def get_queryset(self):
+        """Return a NodeSet for this model."""
+        return NodeSet(self.model)
+
+
+class MetaClass(NodeMeta):
+    """Metaclass for DjangoNode that sets _default_manager.
+
+    This metaclass extends NeoModel's NodeMeta to automatically set _default_manager
+    on DjangoNode subclasses, which Django Admin expects to exist.
+    """
+
+    def __new__(cls, *args, **kwargs):
+        """Create a new class and set _default_manager."""
+        super_new = super().__new__
+        new_cls = super_new(cls, *args, **kwargs)
+        setattr(new_cls, "_default_manager", NeoManager(new_cls))
+        return new_cls
+
+
+class DjangoNode(StructuredNode, metaclass=MetaClass):
     __abstract_node__ = True
 
     # Class-level descriptor that provides Django-like 'objects' API
@@ -201,6 +234,8 @@ class DjangoNode(StructuredNode):
 
         opts = Options(self.Meta, app_label=self.Meta.app_label)
         opts.contribute_to_class(self, self.__name__)
+
+        # Note: _default_manager is set by MetaClass, not here
 
         # Find the primary key field name
         pk_field_name = None
