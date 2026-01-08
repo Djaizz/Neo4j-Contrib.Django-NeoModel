@@ -176,7 +176,7 @@ class NeoManager:
         self.model = model
 
     def get_queryset(self):
-        return NeoNodeSet(self.model)
+        return NodeSet(self.model)
 
 
 class MetaClass(NodeMeta):
