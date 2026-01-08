@@ -33,16 +33,7 @@ class DjangoNeoModelAdmin(ModelAdmin):
     """
 
     def has_add_permission(self, request: HttpRequest) -> bool:
-        return True
-
-    def has_change_permission(self,
-                              request: HttpRequest,
-                              obj: DjangoNode | None = None) -> bool:
-        return True
-
-    def has_delete_permission(self,
-                              request: HttpRequest,
-                              obj: DjangoNode | None = None) -> bool:
+        """Return True if the given request has permission to add a new object."""
         return True
 
     def has_view_permission(self,
@@ -55,6 +46,12 @@ class DjangoNeoModelAdmin(ModelAdmin):
         """
         return True
 
+    def has_change_permission(self,
+                              request: HttpRequest,
+                              obj: DjangoNode | None = None) -> bool:
+        """Return True if the given request has permission to change the given model instance."""
+        return True
+
     def has_view_or_change_permission(self,
                                       request: HttpRequest,
                                       obj: DjangoNode | None = None) -> bool:
@@ -63,6 +60,20 @@ class DjangoNeoModelAdmin(ModelAdmin):
         This is checked by changelist_view before displaying the changelist.
         """
         return self.has_view_permission(request, obj) or self.has_change_permission(request, obj)
+
+    def has_delete_permission(self,
+                              request: HttpRequest,
+                              obj: DjangoNode | None = None) -> bool:
+        """Return True if the given request has permission to delete the given model instance."""
+        return True
+
+
+class _DjangoNeoModelAdmin:
+    """Private class for methods that need validation.
+
+    Methods moved here are proactive overrides that may be unnecessary
+    if underlying incompatibilities are fixed at the NodeSet/DjangoNode level.
+    """
 
     def get_queryset(self, request):
         """Return a queryset for use in Django Admin.

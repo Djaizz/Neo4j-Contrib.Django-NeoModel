@@ -47,6 +47,7 @@ class DjangoField(object):
     unique = False
     primary_key = False
     auto_created = False
+    empty_values = [None, '']  # Django's display_for_field expects field.empty_values
 
     def __init__(self, prop, name):
         self.prop = prop
@@ -298,6 +299,10 @@ class DjangoNode(StructuredNode):
             signals.post_delete.send(sender=self.__class__, instance=self)
 
     def serializable_value(self, attr):
+        """Return serializable value for a field, handling None attributes."""
+        # Django Admin sometimes calls serializable_value with attr=None
+        if attr is None:
+            return None
         return str(getattr(self, attr))
 
     def validate_constraints(self, exclude=None):

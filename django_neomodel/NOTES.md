@@ -9,6 +9,8 @@ This document enumerates all key affordances and interfaces implemented in Djang
 ### 1. **`DjangoField` class** (lines 38-161)
 - **Purpose**: Wraps NeoModel `Property` objects to mimic Django `Field` API
 - **Justification**: Django Admin and forms expect Django `Field` objects with attributes like `name`, `verbose_name`, `formfield()`, `has_default()`, etc. NeoModel `Property` objects don't have this interface.
+- **Key attributes**:
+  - `empty_values = [None, '']` - Django's `display_for_field()` expects `field.empty_values`
 - **Key methods**:
   - `formfield()` - Converts to Django form field
   - `save_form_data()` - Saves form data to instance
@@ -77,6 +79,12 @@ This document enumerates all key affordances and interfaces implemented in Djang
 - **Justification**: `_meta` needs to be a class property, not an instance property
 - **Necessity**: ✅ **Required** for `_meta` implementation
 
+### 6. **`DjangoNode.serializable_value()` method** (in `DjangoNode` class, lines 306-310)
+- **Purpose**: Handles `None` field names (Django Admin sometimes passes `None`)
+- **Justification**: Django Admin sometimes calls `serializable_value(None)`, which causes `TypeError`
+- **Necessity**: ✅ **Required** to prevent crashes in Django Admin
+- **Implementation**: Implemented directly in `DjangoNode.serializable_value()` method to handle edge cases
+
 ---
 
 ## Module: `admin.py`
@@ -84,6 +92,7 @@ This document enumerates all key affordances and interfaces implemented in Djang
 ### 1. **`DjangoNeoModelAdmin` class** (lines 22-236)
 - **Purpose**: Base `ModelAdmin` for NeoModel nodes
 - **Justification**: Django Admin needs customizations to work with NeoModel
+- **Note**: Unlike `DjangoNode` integrations (which are **reactive** - Django calls/accesses them), these are **proactive** overrides of Django Admin's defaults. Their necessity depends on whether the underlying incompatibilities could be fixed at a lower level (e.g., making NodeSet compatible with Django Admin's expectations).
 
 **Key methods:**
 
@@ -92,50 +101,35 @@ This document enumerates all key affordances and interfaces implemented in Djang
 - **Purpose**: Bypass Django's permission system (all return `True`)
 - **Justification**: NeoModel doesn't integrate with Django's auth system
 - **Necessity**: ✅ **Required** for Django Admin to display pages
+- **Validation needed**: ⚠️ Could Django Admin work without these if we integrated with Django's auth system?
 
 #### **`get_queryset()` method** (lines 67-94)
 - **Purpose**: Returns NodeSet from `model.objects.all()` with error handling
 - **Justification**: Django Admin expects a queryset; converts NeoModel NodeSet
-- **Necessity**: ✅ **Required** for Django Admin changelist
+- **Necessity**: ⚠️ **Needs validation** - Could Django Admin work with `model.objects.all()` directly if NodeSet fully implements Django QuerySet interface?
+- **Current implementation**: Includes error handling wrapper (debugging code)
 
 #### **`get_object()` method** (lines 96-127)
 - **Purpose**: Retrieves single object by primary key
 - **Justification**: Django Admin's default expects Django ORM queryset `.get()`. NeoModel uses custom primary keys (not `id`).
-- **Necessity**: ✅ **Required** for Django Admin detail/change views
+- **Necessity**: ⚠️ **Needs validation** - Could Django Admin's default work if NodeSet's `.get()` method properly handled custom primary keys?
+- **Current implementation**: Custom logic to find pk field and query by it
 
 #### **`get_search_results()` method** (lines 129-152)
 - **Purpose**: Implements search using NeoModel's `Q` objects
 - **Justification**: Django Admin's default uses Django ORM `Q` objects. NeoModel has its own `Q` objects.
-- **Necessity**: ✅ **Required** for Django Admin search functionality
+- **Necessity**: ⚠️ **Needs validation** - Could Django Admin's default work if NeoModel's `Q` objects were compatible with Django's `Q` objects, or if NodeSet handled the conversion?
+- **Current implementation**: Converts Django Admin's search into NeoModel `Q` objects
 
 #### **`get_changelist()` method** (lines 154-180)
 - **Purpose**: Error handling wrapper for ChangeList creation
 - **Justification**: Better error visibility during debugging
-- **Necessity**: ⚠️ **Helpful for debugging**, not strictly required
+- **Necessity**: ⚠️ **Debugging helper**, not strictly required
 
 #### **`changelist_view()` method** (lines 182-236)
 - **Purpose**: Error handling wrapper that returns HTML error page
 - **Justification**: Better error visibility during debugging
-- **Necessity**: ⚠️ **Helpful for debugging**, not strictly required
-
----
-
-## Module: `dev.py`
-
-### 1. **Monkey-patches** (lines 15-32)
-- **Purpose**: Fixes compatibility issues between Django and NeoModel
-
-**Patches:**
-
-#### **`DjangoField.empty_values`** (lines 17-18)
-- **Purpose**: Adds `empty_values` attribute expected by Django's `display_for_field()`
-- **Justification**: Django Admin calls `display_for_field()` which expects `field.empty_values`
-- **Necessity**: ✅ **Required** for Django Admin field display
-
-#### **`DjangoNode.serializable_value()`** (lines 22-32)
-- **Purpose**: Handles `None` field names (Django Admin sometimes passes `None`)
-- **Justification**: Django Admin sometimes calls `serializable_value(None)`, which causes `TypeError`
-- **Necessity**: ✅ **Required** to prevent crashes in Django Admin
+- **Necessity**: ⚠️ **Debugging helper**, not strictly required
 
 ---
 
@@ -168,16 +162,19 @@ This document enumerates all key affordances and interfaces implemented in Djang
 
 ## Summary
 
-### **Core Requirements (Cannot be Removed):**
-1. ✅ `DjangoField` - Required for Django Admin/forms
-2. ✅ `DjangoNode` with `_meta`, `full_clean()`, `validate_unique()`, `validate_constraints()` - Required for Django Admin/forms
-3. ✅ `_ObjectsDescriptor` / `.objects` - Required for Django-like API
-4. ✅ `DjangoNeoModelAdmin` permission methods - Required for Django Admin
-5. ✅ `DjangoNeoModelAdmin.get_queryset()` - Required for Django Admin
-6. ✅ `DjangoNeoModelAdmin.get_object()` - Required for Django Admin detail views
-7. ✅ `DjangoNeoModelAdmin.get_search_results()` - Required for Django Admin search
-8. ✅ Monkey-patches in `dev.py` - Required to prevent crashes
-9. ✅ `NeomodelConfig` - Required for NeoModel configuration in Django
+### **Core Requirements (Fully Justified - Reactive to Django's API):**
+1. ✅ `DjangoField` - Required for Django Admin/forms (Django accesses field attributes)
+2. ✅ `DjangoNode` with `_meta`, `full_clean()`, `validate_unique()`, `validate_constraints()`, `serializable_value()` - Required (Django calls these methods)
+3. ✅ `_ObjectsDescriptor` / `.objects` - Required (Django Admin expects `Model.objects.all()`)
+4. ✅ Django Signals Integration - Required (if Django apps depend on signals)
+5. ✅ `DjangoField.empty_values` class attribute - Required (Django's `display_for_field()` accesses this)
+6. ✅ `NeomodelConfig` - Required for NeoModel configuration in Django
+
+### **Needs Validation (Proactive Overrides - May Be Unnecessary):**
+1. ⚠️ `DjangoNeoModelAdmin` permission methods - Could Django Admin work without these if we integrated with Django's auth system?
+2. ⚠️ `DjangoNeoModelAdmin.get_queryset()` - Could Django Admin work with `model.objects.all()` directly if NodeSet fully implements Django QuerySet interface?
+3. ⚠️ `DjangoNeoModelAdmin.get_object()` - Could Django Admin's default work if NodeSet's `.get()` method properly handled custom primary keys?
+4. ⚠️ `DjangoNeoModelAdmin.get_search_results()` - Could Django Admin's default work if NeoModel's `Q` objects were compatible with Django's `Q` objects?
 
 ### **Potentially Removable (Debugging/Convenience):**
 1. ⚠️ `Query` dataclass - May not be used if Django Admin doesn't need it
@@ -189,4 +186,5 @@ This document enumerates all key affordances and interfaces implemented in Djang
 1. Is `Query` dataclass actually used anywhere? (grep for `query.order_by` or `query.select_related`)
 2. Can error handling in `get_changelist()` and `changelist_view()` be simplified or removed?
 3. Are management commands actually used, or can users call NeoModel functions directly?
+4. **For `DjangoNeoModelAdmin` overrides**: Could these be eliminated by fixing incompatibilities at the NodeSet/DjangoNode level instead?
 
