@@ -164,11 +164,15 @@ class DjangoField(object):
         return first_choice + choices
 
 
+# patch NodeSet with `.query` to make it compatible with Django Admin expectations
 @dataclass
 class Query:
     """Query object for Django Admin compatibility with NeoModel NodeSets."""
     select_related: bool = False
     order_by: list[str] = field(default_factory=lambda: ["pk"])
+
+
+NodeSet.query = Query()
 
 
 class NeoManager:
