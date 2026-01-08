@@ -171,6 +171,22 @@ class Query:
     order_by: list[str] = field(default_factory=lambda: ["pk"])
 
 
+class NeoManager:
+    def __init__(self, model):
+        self.model = model
+
+    def get_queryset(self):
+        return NeoNodeSet(self.model)
+
+
+class MetaClass(NodeMeta):
+    def __new__(cls, *args, **kwargs):
+        super_new = super().__new__
+        new_cls = super_new(cls, *args, **kwargs)
+        setattr(new_cls, "_default_manager", NeoManager(new_cls))
+        return new_cls
+
+
 class _ObjectsDescriptor:
     """Descriptor that provides Django-like 'objects' API for NeoModel nodes.
 
@@ -185,37 +201,6 @@ class _ObjectsDescriptor:
         if cls is None:
             cls = type(obj)
         return cls.nodes
-
-
-class NeoManager:
-    """Django-style manager wrapper for NeoModel nodes.
-
-    Provides a Django Manager-like interface that wraps NeoModel's NodeSet.
-    This is used to set _default_manager on DjangoNode classes for Django Admin compatibility.
-    """
-
-    def __init__(self, model):
-        """Initialize the manager with the model class."""
-        self.model = model
-
-    def get_queryset(self):
-        """Return a NodeSet for this model."""
-        return NodeSet(self.model)
-
-
-class MetaClass(NodeMeta):
-    """Metaclass for DjangoNode that sets _default_manager.
-
-    This metaclass extends NeoModel's NodeMeta to automatically set _default_manager
-    on DjangoNode subclasses, which Django Admin expects to exist.
-    """
-
-    def __new__(cls, *args, **kwargs):
-        """Create a new class and set _default_manager."""
-        super_new = super().__new__
-        new_cls = super_new(cls, *args, **kwargs)
-        setattr(new_cls, "_default_manager", NeoManager(new_cls))
-        return new_cls
 
 
 class DjangoNode(StructuredNode, metaclass=MetaClass):
