@@ -27,8 +27,8 @@ classifiers = [
     "Topic :: Database",
 ]
 dependencies = [
-    'Django >= 6.0',
-    'NeoModel @ git+https://GitHub.com/Djaizz/Neo4j-Contrib.NeoModel',
+    'django >= 6.0',
+    'neomodel @ git+https://github.com/djaizz/neo4j-contrib.neomodel',
 ]
 version='0.2.0'
 
