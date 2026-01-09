@@ -237,6 +237,207 @@ class DjangoNeoModelAdmin(ModelAdmin):
 
         return translated_ordering
 
+    def get_search_results(self, request, queryset, search_term):
+        """Override to handle search using neomodel filters instead of Django Q objects.
+
+        This default implementation handles search across all fields in `search_fields` using
+        NeoModel's Q objects with OR logic. Subclasses can override for custom search behavior.
+        """
+        if search_term and self.search_fields and len(self.search_fields) > 0:
+            # Build a single Q object with OR conditions for all search fields
+            # Instead of combining multiple Q objects (which can cause structure issues),
+            # build a single Q object with all conditions as kwargs
+            # This creates children as tuples (from kwargs.items()), not nested Q objects
+            search_kwargs = {}
+            for field in self.search_fields:
+                search_kwargs[f"{field}__icontains"] = search_term
+
+            # Create a single Q object with OR connector and all conditions
+            # This ensures children are tuples, not nested Q objects
+            search_q = Q(_connector=Q.OR, **search_kwargs)
+
+            # Directly manipulate q_filters instead of using filter() to avoid structure issues
+            # filter() does: self.q_filters = Q(self.q_filters & Q(...)) which wraps the combined Q
+            # in another Q(), creating: Q(Q(existing) & Q(new)). While the monkey-patch handles this
+            # correctly, it's still better to avoid the extra wrapping by using the & operator directly.
+            #
+            # Note: The monkey-patch (applied on module import) ensures Q objects in children are
+            # always recognized and processed correctly, so we can safely combine q_filters.
+            if not hasattr(queryset, 'q_filters'):
+                # No q_filters attribute (shouldn't happen for NodeSet)
+                logger.error(
+                    f"NodeSet for {self.model.__name__} has no q_filters attribute. "
+                    f"Cannot apply search."
+                )
+                return queryset, False
+
+            # Get existing q_filters and combine with search_q using & operator
+            # The monkey-patch handles Q objects in children correctly, so we can safely combine
+            existing_q = queryset.q_filters
+
+            # Check if q_filters is truly empty (no children)
+            # Empty Q() evaluates to False and has len() == 0
+            if not existing_q or len(existing_q) == 0:
+                # Empty q_filters, just set our search_q directly
+                queryset.q_filters = search_q
+            else:
+                # Existing q_filters - combine using & operator directly
+                # This creates: Q(AND, [existing_q, search_q])
+                # The monkey-patch ensures Q objects in children are handled correctly
+                queryset.q_filters = existing_q & search_q
+        return queryset, False  # False = no distinct needed for NeoModel
+
+    def get_changelist(self, request, **kwargs):
+        """Return the ChangeList class for use on the changelist page.
+
+        Override to catch errors during ChangeList instantiation.
+        """
+        try:
+            return super().get_changelist(request, **kwargs)
+        except Exception as e:
+            # Log the full error with traceback
+            logger.error(
+                f"Error in {self.__class__.__name__}.get_changelist for "
+                f"{self.model.__name__}: {e}",
+                exc_info=True,
+                stack_info=True
+            )
+            # Print to stderr for immediate visibility (always shows)
+            import sys
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print(
+                f"ERROR in {self.__class__.__name__}.get_changelist for "
+                f"{self.model.__name__}:",
+                file=sys.stderr
+            )
+            print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+            print(f"Exception message: {e}", file=sys.stderr)
+            print("\nFull traceback:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            # Re-raise to show actual error in Django Admin
+            raise
+
+    def changelist_view(self, request, extra_context=None):
+        """The 'change list' admin view for this model.
+
+        Override to catch errors during changelist rendering.
+        """
+        try:
+            return super().changelist_view(request, extra_context)
+        except Exception as e:
+            # Log the full error with traceback
+            logger.error(
+                f"Error in {self.__class__.__name__}.changelist_view for "
+                f"{self.model.__name__}: {e}",
+                exc_info=True,
+                stack_info=True
+            )
+            # Print to stderr for immediate visibility (always shows)
+            import sys
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print(
+                f"ERROR in {self.__class__.__name__}.changelist_view for "
+                f"{self.model.__name__}:",
+                file=sys.stderr
+            )
+            print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+            print(f"Exception message: {e}", file=sys.stderr)
+            print("\nFull traceback:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+
+            # Return HTML error page if DEBUG is True
+            from django.conf import settings
+            if settings.DEBUG:
+                from django.http import HttpResponse
+                error_html = format_html(
+                    "<h1>Error in changelist_view</h1>"
+                    "<p><strong>Exception type:</strong> {}</p>"
+                    "<p><strong>Exception message:</strong> {}</p>"
+                    "<pre>{}</pre>",
+                    type(e).__name__,
+                    str(e),
+                    traceback.format_exc()
+                )
+                return HttpResponse(error_html, status=500)
+            # Re-raise if not DEBUG
+            raise
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        """The 'change' admin view for this model.
+
+        Override to catch errors during change form rendering and ensure
+        extra_context is properly initialized.
+        """
+        # Ensure extra_context is a dict, not None
+        if extra_context is None:
+            extra_context = {}
+
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except Exception as e:
+            # Log the full error with traceback
+            logger.error(
+                f"Error in {self.__class__.__name__}.changeform_view for "
+                f"{self.model.__name__}: {e}",
+                exc_info=True,
+                stack_info=True
+            )
+            # Print to stderr for immediate visibility (always shows)
+            import sys
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print(
+                f"ERROR in {self.__class__.__name__}.changeform_view for "
+                f"{self.model.__name__}:",
+                file=sys.stderr
+            )
+            print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+            print(f"Exception message: {e}", file=sys.stderr)
+            print("\nFull traceback:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            # Re-raise to show actual error in Django Admin
+            raise
+
+    def get_readonly_fields(self, request, obj=None):
+        """Return readonly fields, excluding NeoModel internal fields.
+
+        This prevents Django Admin from displaying NeoModel internal fields
+        like 'element_id_property' in the form.
+        """
+        readonly = list(super().get_readonly_fields(request, obj) or [])
+        # Exclude NeoModel internal fields from being displayed
+        internal_fields = ['element_id', 'element_id_property']
+        readonly = [f for f in readonly if f not in internal_fields]
+        return readonly
+
+    def get_form(self, request, obj=None, **kwargs):
+        """Return a ModelForm class for use in the admin.
+
+        Override to ensure the form is properly configured for NeoModel nodes
+        and excludes internal fields.
+        """
+        # Exclude NeoModel internal fields from the form
+        if 'exclude' not in kwargs:
+            kwargs['exclude'] = []
+        if not isinstance(kwargs['exclude'], list):
+            kwargs['exclude'] = list(kwargs['exclude'])
+        # Add NeoModel internal fields to exclude list
+        internal_fields = ['element_id', 'element_id_property']
+        for field in internal_fields:
+            if field not in kwargs['exclude']:
+                kwargs['exclude'].append(field)
+
+        form = super().get_form(request, obj, **kwargs)
+        return form
+
     def get_queryset(self, request):
         """Return a queryset for use in Django Admin with translated ordering.
 
@@ -431,7 +632,9 @@ class _DjangoNeoModelAdmin:
             # Get the pk field from the model class (set by DjangoNode._meta)
             pk_prop = getattr(self.model, 'pk', None)
             if not pk_prop:
-                raise ValueError(f"{self.model.__name__} must have a field with primary_key=True")
+                raise ValueError(
+                    f"{self.model.__name__} must have a field with primary_key=True"
+                )
 
             # Get the field name from the pk property
             pk_field_name = pk_prop.name
@@ -445,147 +648,14 @@ class _DjangoNeoModelAdmin:
             # Check if it's a "not found" type exception
             if 'not found' in str(e).lower() or 'does not exist' in str(e).lower():
                 from django.http import Http404
-                raise Http404(f"{self.model._meta.verbose_name} with pk={object_id} does not exist.")
-            # For other exceptions, log and re-raise
-            logger.error(f"Exception in {self.__class__.__name__}.get_object for {self.model.__name__}: {e}", exc_info=True, stack_info=True)
-            raise
-
-    def get_search_results(self, request, queryset, search_term):
-        """Override to handle search using neomodel filters instead of Django Q objects.
-
-        This default implementation handles search across all fields in `search_fields` using
-        NeoModel's Q objects with OR logic. Subclasses can override for custom search behavior.
-        """
-        if search_term and self.search_fields and len(self.search_fields) > 0:
-            # Build a single Q object with OR conditions for all search fields
-            # Instead of combining multiple Q objects (which can cause structure issues),
-            # build a single Q object with all conditions as kwargs
-            # This creates children as tuples (from kwargs.items()), not nested Q objects
-            search_kwargs = {}
-            for field in self.search_fields:
-                search_kwargs[f"{field}__icontains"] = search_term
-
-            # Create a single Q object with OR connector and all conditions
-            # This ensures children are tuples, not nested Q objects
-            search_q = Q(_connector=Q.OR, **search_kwargs)
-
-            # Directly manipulate q_filters instead of using filter() to avoid structure issues
-            # filter() does: self.q_filters = Q(self.q_filters & Q(...)) which wraps the combined Q
-            # in another Q(), creating: Q(Q(existing) & Q(new)), which can cause parsing issues.
-            #
-            # The problem: When you do Q(some_q_object), the some_q_object becomes a child in children.
-            # The parser checks isinstance(child, QBase) to decide if it should recurse or treat as tuple.
-            # But when filter() wraps in Q(), it creates a structure where a Q object is in children,
-            # and for some reason isinstance() might not recognize it properly, leading to the error.
-            #
-            # Solution: Never use filter(). Always directly set q_filters using the & operator,
-            # which creates the proper structure without the extra wrapping.
-            if not hasattr(queryset, 'q_filters'):
-                # No q_filters attribute (shouldn't happen for NodeSet)
-                # Can't proceed without q_filters
-                logger.error(
-                    f"NodeSet for {self.model.__name__} has no q_filters attribute. "
-                    f"Cannot apply search."
+                raise Http404(
+                    f"{self.model._meta.verbose_name} with pk={object_id} does not exist."
                 )
-                return queryset, False
-
-            # Get existing q_filters and combine with search_q
-            # The monkey-patch above handles Q objects in children correctly, so we can
-            # safely combine q_filters without worrying about parsing errors
-            existing_q = queryset.q_filters
-
-            # Check if q_filters is truly empty (no children)
-            # Empty Q() evaluates to False and has len() == 0
-            if not existing_q or len(existing_q) == 0:
-                # Empty q_filters, just set our search_q directly
-                queryset.q_filters = search_q
-            else:
-                # Existing q_filters - combine using & operator directly
-                # This creates the proper structure: Q(AND, [existing_q, search_q])
-                # The monkey-patch ensures Q objects in children are handled correctly
-                queryset.q_filters = existing_q & search_q
-        return queryset, False  # False = no distinct needed for NeoModel
-
-    def get_changelist(self, request, **kwargs):
-        """Return the ChangeList class for use on the changelist page.
-
-        Override to catch errors during ChangeList instantiation.
-        """
-        try:
-            return super().get_changelist(request, **kwargs)
-        except Exception as e:
-            # Log the full error with traceback
+            # For other exceptions, log and re-raise
             logger.error(
-                f"Error in {self.__class__.__name__}.get_changelist for {self.model.__name__}: {e}",
+                f"Exception in {self.__class__.__name__}.get_object for "
+                f"{self.model.__name__}: {e}",
                 exc_info=True,
                 stack_info=True
             )
-            # Print to stderr for immediate visibility (always shows)
-            import sys
-            print("=" * 80, file=sys.stderr)
-            print("=" * 80, file=sys.stderr)
-            print(f"ERROR in {self.__class__.__name__}.get_changelist for {self.model.__name__}:", file=sys.stderr)
-            print(f"Exception type: {type(e).__name__}", file=sys.stderr)
-            print(f"Exception message: {e}", file=sys.stderr)
-            print("\nFull traceback:", file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
-            print("=" * 80, file=sys.stderr)
-            print("=" * 80, file=sys.stderr)
-            # Re-raise to show actual error in Django Admin
             raise
-
-    def changelist_view(self, request, extra_context=None):
-        """The 'change list' admin view for this model.
-
-        Override to catch errors during changelist rendering.
-        """
-        try:
-            return super().changelist_view(request, extra_context)
-        except Exception as e:
-            # Log the full error with traceback
-            logger.error(
-                f"Error in {self.__class__.__name__}.changelist_view for {self.model.__name__}: {e}",
-                exc_info=True,
-                stack_info=True
-            )
-            # Print to stderr for immediate visibility (always shows)
-            import sys
-            print("=" * 80, file=sys.stderr)
-            print("=" * 80, file=sys.stderr)
-            print(f"ERROR in {self.__class__.__name__}.changelist_view for {self.model.__name__}:", file=sys.stderr)
-            print(f"Exception type: {type(e).__name__}", file=sys.stderr)
-            print(f"Exception message: {e}", file=sys.stderr)
-            print("\nFull traceback:", file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
-            print("=" * 80, file=sys.stderr)
-            print("=" * 80, file=sys.stderr)
-
-            # Capture full traceback as string
-            traceback_buffer = StringIO()
-            traceback.print_exc(file=traceback_buffer)
-            traceback_str = traceback_buffer.getvalue()
-
-            # Return HttpResponse with full error details instead of re-raising
-            # This bypasses Django's generic error handling
-            error_html = format_html(
-                """
-                <html>
-                <head><title>Django Admin Error - {}</title></head>
-                <body>
-                    <h1>Error in {} for {}</h1>
-                    <h2>Exception Type: {}</h2>
-                    <h2>Exception Message:</h2>
-                    <pre style="background: #f0f0f0; padding: 10px; border: 1px solid #ccc;">{}</pre>
-                    <h2>Full Traceback:</h2>
-                    <pre style="background: #f0f0f0; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap;">{}</pre>
-                </body>
-                </html>
-                """,
-                self.model.__name__,
-                self.__class__.__name__,
-                self.model.__name__,
-                type(e).__name__,
-                str(e),
-                traceback_str
-            )
-            return HttpResponse(error_html, status=500)

@@ -143,11 +143,14 @@ This document enumerates all key affordances and interfaces implemented in Djang
   - Must translate `pk` before NeoModel's query builder validates properties
   - Must intercept `order_by()` because Django Admin may apply ordering after `get_queryset()` returns
 
-#### **`get_object()` method** (lines 96-127)
+#### **`get_object()` method** (lines 240-280)
 - **Purpose**: Retrieves single object by primary key
-- **Justification**: Django Admin's default expects Django ORM queryset `.get()`. NeoModel uses custom primary keys (not `id`).
-- **Necessity**: ⚠️ **Needs validation** - Could Django Admin's default work if NodeSet's `.get()` method properly handled custom primary keys?
-- **Current implementation**: Custom logic to find pk field and query by it
+- **Justification**: Django Admin's default `get_object()` expects a queryset with a `.model` attribute (line 881 in Django's `options.py`), but NeoModel `NodeSet` doesn't have that. This override directly queries the NeoModel node by the field marked with `primary_key=True`.
+- **Implementation**:
+  - Gets the pk field from `model.pk` (set by `DjangoNode._meta`)
+  - Uses `model.objects.get(**{pk_field_name: object_id})` to query directly
+  - Handles `DoesNotExist` exceptions and converts to Django's `Http404`
+- **Necessity**: ✅ **Required** - Django Admin's default `get_object()` accesses `queryset.model`, which `NodeSet` doesn't have. Without this override, Django Admin will raise `AttributeError: 'NodeSet' object has no attribute 'model'`.
 
 #### **`get_search_results()` method** (lines 484-520)
 - **Purpose**: Implements search using NeoModel's `Q` objects
@@ -210,10 +213,9 @@ This document enumerates all key affordances and interfaces implemented in Djang
 8. ✅ `NeomodelConfig` - Required for NeoModel configuration in Django
 9. ✅ `DjangoNeoModelAdmin.get_ordering()` - Required (translates `pk` to actual field name for NeoModel compatibility)
 10. ✅ `DjangoNeoModelAdmin.get_queryset()` - Required (uses NodeSet directly, applies translated ordering, intercepts `order_by()` to translate `pk`)
-11. ✅ `DjangoNeoModelAdmin.get_search_results()` - Required (converts Django Admin search to NeoModel Q objects)
-12. ✅ **Q Filters Parsing Monkey-Patch** (in `admin.py`, lines 16-78) - Required (fixes NeoModel bug where `isinstance(child, QBase)` fails for nested Q objects)
-11. ✅ `DjangoNeoModelAdmin.get_search_results()` - Required (converts Django Admin search to NeoModel Q objects)
-12. ✅ **Q Filters Parsing Monkey-Patch** - Required (fixes NeoModel bug where `isinstance(child, QBase)` fails for nested Q objects)
+11. ✅ `DjangoNeoModelAdmin.get_object()` - Required (Django Admin's default expects `queryset.model`, which NodeSet doesn't have)
+12. ✅ `DjangoNeoModelAdmin.get_search_results()` - Required (converts Django Admin search to NeoModel Q objects)
+13. ✅ **Q Filters Parsing Monkey-Patch** (in `admin.py`, lines 16-78) - Required (fixes NeoModel bug where `isinstance(child, QBase)` fails for nested Q objects)
 
 ### **Needs Validation (Proactive Overrides - May Be Unnecessary):**
 1. ⚠️ `DjangoNeoModelAdmin` permission methods - Could Django Admin work without these if we integrated with Django's auth system?
