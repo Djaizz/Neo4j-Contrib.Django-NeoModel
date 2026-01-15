@@ -175,7 +175,7 @@ class DjangoNeoModelAdmin(ModelAdmin):
     """
 
     # BaseModelAdmin options
-    # ----------------------
+    # ======================
     # autocomplete_fields = ()
     # raw_id_fields = ()
     # fields = None
@@ -195,7 +195,7 @@ class DjangoNeoModelAdmin(ModelAdmin):
     # checks_class = BaseModelAdminChecks
 
     # ModelAdmin options
-    # ------------------
+    # ==================
     # list_display = ("__str__",)
     # list_display_links = ()
     # list_filter = ()
@@ -215,6 +215,7 @@ class DjangoNeoModelAdmin(ModelAdmin):
     # inlines = ()
 
     # Custom templates (designed to be over-ridden in subclasses)
+    # -----------------------------------------------------------
     # add_form_template = None
     # change_form_template = None
     # change_list_template = None
@@ -224,6 +225,7 @@ class DjangoNeoModelAdmin(ModelAdmin):
     # popup_response_template = None
 
     # Actions
+    # -------
     # actions = ()
     # action_form = helpers.ActionForm
     # actions_on_top = True
