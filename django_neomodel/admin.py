@@ -174,6 +174,8 @@ class DjangoNeoModelAdmin(ModelAdmin):
     for `self.model.nodes.all()` via the `DjangoNode.objects` descriptor.
     """
 
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#modeladmin-options
+
     # BaseModelAdmin options
     # ======================
     # autocomplete_fields = ()
