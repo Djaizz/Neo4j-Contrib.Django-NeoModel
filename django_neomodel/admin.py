@@ -1,18 +1,22 @@
 """Django Admin integration for NeoModel nodes."""
 
+
 import logging
 import traceback
-from io import StringIO
 from typing import Any
 
 from django.contrib.admin import ModelAdmin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest
 from django.utils.html import format_html
 
 from neomodel.match_q import Q, QBase
 from neomodel.sync_.match import NodeSet
 
 from . import DjangoNode
+
+
+__all__ = ['DjangoNeoModelAdmin']
+
 
 # ============================================================================
 # Monkey-patch for Q Filters Parsing Issue
@@ -52,6 +56,7 @@ from . import DjangoNode
 # ============================================================================
 
 _original_parse_q_filters = None
+
 
 def _patched_parse_q_filters(self, ident: str, q: QBase | Any, source_class):
     """Patched version of _parse_q_filters that handles Q objects in children.
@@ -135,6 +140,7 @@ def _patched_parse_q_filters(self, ident: str, q: QBase | Any, source_class):
         opt_ret = f"NOT ({opt_ret})"
     return ret, opt_ret
 
+
 def _apply_q_filters_patch():
     """Apply monkey-patch to _parse_q_filters to handle Q objects in children.
 
@@ -147,11 +153,9 @@ def _apply_q_filters_patch():
         _original_parse_q_filters = QueryBuilder._parse_q_filters
         QueryBuilder._parse_q_filters = _patched_parse_q_filters
 
+
 # Apply patch on module import to ensure it's active before any QueryBuilder instances are created
 _apply_q_filters_patch()
-
-
-__all__ = ['DjangoNeoModelAdmin']
 
 
 logger = logging.getLogger(__name__)
@@ -169,6 +173,63 @@ class DjangoNeoModelAdmin(ModelAdmin):
     The default `get_queryset` implementation uses `self.model.objects.all()` which is an alias
     for `self.model.nodes.all()` via the `DjangoNode.objects` descriptor.
     """
+
+    # BaseModelAdmin options
+    # ----------------------
+    # autocomplete_fields = ()
+    # raw_id_fields = ()
+    # fields = None
+    # exclude = None
+    # fieldsets = None
+    # form = forms.ModelForm
+    # filter_vertical = ()
+    # filter_horizontal = ()
+    # radio_fields = {}
+    # prepopulated_fields = {}
+    # formfield_overrides = {}
+    # readonly_fields = ()
+    # ordering = None
+    # sortable_by = None
+    # view_on_site = True
+    # show_full_result_count = True
+    # checks_class = BaseModelAdminChecks
+
+    # ModelAdmin options
+    # ------------------
+    # list_display = ("__str__",)
+    # list_display_links = ()
+    # list_filter = ()
+    # list_select_related = False
+    # list_per_page = 100
+    # list_max_show_all = 200
+    # list_editable = ()
+    # search_fields = ()
+    # search_help_text = None
+    # date_hierarchy = None
+    # save_as = False
+    # save_as_continue = True
+    # save_on_top = False
+    # paginator = Paginator
+    # preserve_filters = True
+    # show_facets = ShowFacets.ALLOW
+    # inlines = ()
+
+    # Custom templates (designed to be over-ridden in subclasses)
+    # add_form_template = None
+    # change_form_template = None
+    # change_list_template = None
+    # delete_confirmation_template = None
+    # delete_selected_confirmation_template = None
+    # object_history_template = None
+    # popup_response_template = None
+
+    # Actions
+    # actions = ()
+    # action_form = helpers.ActionForm
+    # actions_on_top = True
+    # actions_on_bottom = False
+    # actions_selection_counter = True
+    # checks_class = ModelAdminChecks
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         """Return True if the given request has permission to add a new object."""
