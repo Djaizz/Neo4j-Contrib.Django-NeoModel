@@ -235,7 +235,9 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
         opts = Options(self.Meta, app_label=self.Meta.app_label)
         opts.contribute_to_class(self, self.__name__)
 
-        # Note: _default_manager is set by MetaClass, not here
+        # Set concrete_model to self for drf-spectacular compatibility
+        # Django ORM sets concrete_model to the model itself for non-proxy models
+        opts.concrete_model = self
 
         # Find the primary key field name
         pk_field_name = None
