@@ -178,24 +178,53 @@ class DjangoNeoModelAdmin(ModelAdmin):
 
     # BaseModelAdmin options
     # ======================
-    # autocomplete_fields = ()
-    # raw_id_fields = ()
-    # fields = None
-    # exclude = None
-    # fieldsets = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.autocomplete_fields
+    # note: NeoModel does not use ForeignKey and ManyToManyField
+    autocomplete_fields = ()
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.raw_id_fields
+    raw_id_fields = ()
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.fields
+    fields = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.exclude
+    exclude = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.fieldsets
+    fieldsets = None
 
     # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.form
     # form = forms.ModelForm
 
-    # filter_vertical = ()
-    # filter_horizontal = ()
-    # radio_fields = {}
-    # prepopulated_fields = {}
-    # formfield_overrides = {}
-    # readonly_fields = ()
-    # ordering = None
-    # sortable_by = None
-    # view_on_site = True
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.filter_horizontal
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.filter_vertical
+    # note: NeoModel does not use ManyToManyField
+    filter_vertical = ()
+    filter_horizontal = ()
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.radio_fields
+    # note: NeoModel does not use ForeignKey
+    radio_fields = {}
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.prepopulated_fields
+    prepopulated_fields = {}
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.formfield_overrides
+    formfield_overrides = {}
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.readonly_fields
+    readonly_fields = ()
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.ordering
+    ordering = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.sortable_by
+    sortable_by = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.view_on_site
+    view_on_site = True
 
     # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.show_full_result_count
     show_full_result_count = True
@@ -211,8 +240,11 @@ class DjangoNeoModelAdmin(ModelAdmin):
     # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_display_links
     list_display_links = ()
 
-    # list_filter = ()
-    # list_select_related = False
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_filter
+    list_filter = ()
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_select_related
+    list_select_related = False
 
     # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_per_page
     list_per_page = 100
@@ -230,6 +262,7 @@ class DjangoNeoModelAdmin(ModelAdmin):
     search_help_text = None
 
     # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.date_hierarchy
+    # * AttributeError: 'DjangoField' object has no attribute 'get_internal_type' *
     date_hierarchy = None
 
     # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.save_as
@@ -243,8 +276,12 @@ class DjangoNeoModelAdmin(ModelAdmin):
 
     # paginator = Paginator
 
-    # preserve_filters = True
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.preserve_filters
+    preserve_filters = True
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.show_facets
     # show_facets = ShowFacets.ALLOW
+
     # inlines = ()
 
     # Custom templates (designed to be over-ridden in subclasses)
