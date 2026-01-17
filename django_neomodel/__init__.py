@@ -55,7 +55,7 @@ class DjangoField(object):
         self.prop = prop
 
         self.name = name
-        self.remote_field = name
+        self.remote_field = None  # Set to None for non-relationship fields (DRF compatibility)
         self.attname = name
         self.verbose_name = name
         self.help_text = getattr(prop, "help_text", "")
