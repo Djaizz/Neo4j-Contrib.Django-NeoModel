@@ -198,13 +198,25 @@ class DjangoNeoModelAdmin(ModelAdmin):
 
     # ModelAdmin options
     # ==================
-    # list_display = ("__str__",)
-    # list_display_links = ()
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_display
+    list_display = ("__str__",)
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_display_links
+    list_display_links = ()
+
     # list_filter = ()
     # list_select_related = False
-    # list_per_page = 100
-    # list_max_show_all = 200
-    # list_editable = ()
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_per_page
+    list_per_page = 100
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_max_show_all
+    list_max_show_all = 1000
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_editable
+    list_editable = ()
+
     # search_fields = ()
     # search_help_text = None
     # date_hierarchy = None
