@@ -227,12 +227,22 @@ class DjangoNeoModelAdmin(ModelAdmin):
     # popup_response_template = None
 
     # Actions
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/actions
     # -------
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.actions
     # actions = ()
+
     # action_form = helpers.ActionForm
-    # actions_on_top = True
-    # actions_on_bottom = False
-    # actions_selection_counter = True
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.actions_on_top
+    actions_on_top = True
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.actions_on_bottom
+    actions_on_bottom = False
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.actions_on_bottom
+    actions_selection_counter = True
+
     # checks_class = ModelAdminChecks
 
     def has_add_permission(self, request: HttpRequest) -> bool:
