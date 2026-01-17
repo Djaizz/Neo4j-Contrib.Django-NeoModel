@@ -183,7 +183,10 @@ class DjangoNeoModelAdmin(ModelAdmin):
     # fields = None
     # exclude = None
     # fieldsets = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.form
     # form = forms.ModelForm
+
     # filter_vertical = ()
     # filter_horizontal = ()
     # radio_fields = {}
@@ -193,7 +196,10 @@ class DjangoNeoModelAdmin(ModelAdmin):
     # ordering = None
     # sortable_by = None
     # view_on_site = True
-    # show_full_result_count = True
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.show_full_result_count
+    show_full_result_count = True
+
     # checks_class = BaseModelAdminChecks
 
     # ModelAdmin options
@@ -217,25 +223,53 @@ class DjangoNeoModelAdmin(ModelAdmin):
     # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.list_editable
     list_editable = ()
 
-    # search_fields = ()
-    # search_help_text = None
-    # date_hierarchy = None
-    # save_as = False
-    # save_as_continue = True
-    # save_on_top = False
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.search_fields
+    search_fields = ()
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.search_help_text
+    search_help_text = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.date_hierarchy
+    date_hierarchy = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.save_as
+    save_as = False
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.save_as_continue
+    save_as_continue = True
+
+    # https://docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.save_on_top
+    save_on_top = False
+
     # paginator = Paginator
+
     # preserve_filters = True
     # show_facets = ShowFacets.ALLOW
     # inlines = ()
 
     # Custom templates (designed to be over-ridden in subclasses)
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#custom-template-options
     # -----------------------------------------------------------
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.add_form_template
     # add_form_template = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.change_form_template
     # change_form_template = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.change_list_template
     # change_list_template = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.delete_confirmation_template
     # delete_confirmation_template = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.delete_selected_confirmation_template
     # delete_selected_confirmation_template = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.object_history_template
     # object_history_template = None
+
+    # docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.popup_response_template
     # popup_response_template = None
 
     # Actions
