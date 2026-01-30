@@ -6,6 +6,8 @@ import traceback
 from typing import Any
 
 from django.contrib.admin import ModelAdmin
+from django.contrib.admin.views.main import ChangeList
+from django.core.paginator import InvalidPage
 from django.http import HttpRequest
 from django.utils.html import format_html
 
@@ -159,6 +161,81 @@ _apply_q_filters_patch()
 
 
 logger = logging.getLogger(__name__)
+
+
+class NeoModelChangeList(ChangeList):
+    """ChangeList that builds the changelist queryset in a NodeSet-safe way.
+
+    Django's default ChangeList.get_queryset() does:
+    1. qs = root_queryset, apply list filters
+    2. qs = qs.filter(q_object)  <- Django Q; corrupts or breaks NeoModel NodeSet
+    3. qs = self.apply_select_related(qs)  <- expects qs.query; NodeSet has no Django query
+    4. qs = qs.order_by(*ordering)
+    5. qs, _ = get_search_results(request, qs, self.query)
+
+    So search runs on a queryset that may already be corrupted by steps 2–4. This
+    subclass, when root_queryset is a NodeSet, applies search first on the clean
+    root (then ordering), and skips Django's filter(q_object) and apply_select_related.
+    """
+
+    def get_queryset(self, request, exclude_parameters=None):
+        if not isinstance(self.root_queryset, NodeSet):
+            return super().get_queryset(request, exclude_parameters)
+
+        # NodeSet path: avoid Django's qs.filter(Django Q) and apply_select_related;
+        # apply search first on clean root (or list-filtered qs), then ordering.
+        (
+            self.filter_specs,
+            self.has_filters,
+            remaining_lookup_params,
+            filters_may_have_duplicates,
+            self.has_active_filters,
+        ) = self.get_filters(request)
+
+        qs = self.root_queryset
+        for filter_spec in self.filter_specs:
+            if (
+                exclude_parameters is None
+                or filter_spec.expected_parameters() != exclude_parameters
+            ):
+                new_qs = filter_spec.queryset(request, qs)
+                if new_qs is not None:
+                    qs = new_qs
+
+        qs, search_may_have_duplicates = self.model_admin.get_search_results(
+            request,
+            qs,
+            self.query,
+        )
+        ordering = self.get_ordering(request, qs)
+        if ordering:
+            qs = qs.order_by(*ordering)
+
+        self.clear_all_filters_qs = self.get_query_string(
+            new_params=remaining_lookup_params,
+            remove=self.get_filters_params(),
+        )
+        if filters_may_have_duplicates | search_may_have_duplicates and hasattr(qs, 'distinct'):
+            return qs.distinct()
+        return qs
+
+    def get_results(self, request):
+        """Build result_list so NodeSet is not used via _clone().
+
+        Django's get_results does: when not multi_page, result_list = self.queryset._clone().
+        For a Django QuerySet, _clone() preserves filters and iteration returns the same set.
+        For a NeoModel NodeSet, _clone() may not preserve filters, so iterating result_list
+        can yield all nodes (e.g. 529) while paginator.count is correct (e.g. 5). Override:
+        for NodeSet, always set result_list from the paginator's page (concrete list).
+        """
+        super().get_results(request)
+        if not isinstance(self.queryset, NodeSet):
+            return
+        # Replace result_list with the paginator's page so we display the same set we counted.
+        try:
+            self.result_list = self.paginator.page(self.page_num).object_list
+        except InvalidPage:
+            raise IncorrectLookupParameters
 
 
 class DjangoNeoModelAdmin(ModelAdmin):
@@ -396,62 +473,36 @@ class DjangoNeoModelAdmin(ModelAdmin):
         return translated_ordering
 
     def get_search_results(self, request, queryset, search_term):
-        """Override to handle search using neomodel filters instead of Django Q objects.
+        """Search using neomodel Q (OR across search_fields) via NodeSet.filter().
 
-        This default implementation handles search across all fields in `search_fields` using
-        NeoModel's Q objects with OR logic. Subclasses can override for custom search behavior.
+        Subclasses can override; to guarantee the changelist uses your filtered
+        queryset, apply search yourself and return (queryset, False) without
+        calling super() when search_term is set.
         """
         if search_term and self.search_fields and len(self.search_fields) > 0:
-            # Build a single Q object with OR conditions for all search fields
-            # Instead of combining multiple Q objects (which can cause structure issues),
-            # build a single Q object with all conditions as kwargs
-            # This creates children as tuples (from kwargs.items()), not nested Q objects
-            search_kwargs = {}
-            for field in self.search_fields:
-                search_kwargs[f"{field}__icontains"] = search_term
-
-            # Create a single Q object with OR connector and all conditions
-            # This ensures children are tuples, not nested Q objects
+            search_kwargs = {
+                f"{field}__icontains": search_term
+                for field in self.search_fields
+            }
             search_q = Q(_connector=Q.OR, **search_kwargs)
-
-            # Directly manipulate q_filters instead of using filter() to avoid structure issues
-            # filter() does: self.q_filters = Q(self.q_filters & Q(...)) which wraps the combined Q
-            # in another Q(), creating: Q(Q(existing) & Q(new)). While the monkey-patch handles this
-            # correctly, it's still better to avoid the extra wrapping by using the & operator directly.
-            #
-            # Note: The monkey-patch (applied on module import) ensures Q objects in children are
-            # always recognized and processed correctly, so we can safely combine q_filters.
-            if not hasattr(queryset, 'q_filters'):
-                # No q_filters attribute (shouldn't happen for NodeSet)
-                logger.error(
-                    f"NodeSet for {self.model.__name__} has no q_filters attribute. "
-                    f"Cannot apply search."
-                )
-                return queryset, False
-
-            # Get existing q_filters and combine with search_q using & operator
-            # The monkey-patch handles Q objects in children correctly, so we can safely combine
-            existing_q = queryset.q_filters
-
-            # Check if q_filters is truly empty (no children)
-            # Empty Q() evaluates to False and has len() == 0
-            if not existing_q or len(existing_q) == 0:
-                # Empty q_filters, just set our search_q directly
-                queryset.q_filters = search_q
+            if hasattr(queryset, "filter"):
+                queryset = queryset.filter(search_q)
             else:
-                # Existing q_filters - combine using & operator directly
-                # This creates: Q(AND, [existing_q, search_q])
-                # The monkey-patch ensures Q objects in children are handled correctly
-                queryset.q_filters = existing_q & search_q
-        return queryset, False  # False = no distinct needed for NeoModel
+                logger.error(
+                    "Queryset for %s has no filter method; cannot apply search.",
+                    self.model.__name__,
+                )
+        return queryset, False  # no distinct needed for NeoModel
 
     def get_changelist(self, request, **kwargs):
         """Return the ChangeList class for use on the changelist page.
 
-        Override to catch errors during ChangeList instantiation.
+        Uses NeoModelChangeList so search and filtering are applied to NodeSets
+        without corrupting them (Django's default path runs filter(Django Q) and
+        order_by before get_search_results, which breaks NeoModel NodeSets).
         """
         try:
-            return super().get_changelist(request, **kwargs)
+            return NeoModelChangeList
         except Exception as e:
             # Log the full error with traceback
             logger.error(
@@ -766,54 +817,4 @@ class DjangoNeoModelAdmin(ModelAdmin):
             print("=" * 80, file=sys.stderr)
             print("=" * 80, file=sys.stderr)
             # Re-raise to show actual error
-            raise
-
-
-class _DjangoNeoModelAdmin:
-    """Private class for methods that need validation.
-
-    Methods moved here are proactive overrides that may be unnecessary
-    if underlying incompatibilities are fixed at the NodeSet/DjangoNode level.
-    """
-
-    def get_object(self, request, object_id, from_field=None):
-        """Override to handle NeoModel nodes that use custom unique identifiers as pk.
-
-        Django Admin's default get_object expects a queryset with a .model attribute,
-        but NeoModel NodeSets don't have that. This override directly queries the
-        NeoModel node by the field marked with primary_key=True.
-
-        Note: NeoModel doesn't allow querying by element_id (it's an internal identifier),
-        so we use the field marked with primary_key=True to determine which field to query.
-        """
-        try:
-            # Get the pk field from the model class (set by DjangoNode._meta)
-            pk_prop = getattr(self.model, 'pk', None)
-            if not pk_prop:
-                raise ValueError(
-                    f"{self.model.__name__} must have a field with primary_key=True"
-                )
-
-            # Get the field name from the pk property
-            pk_field_name = pk_prop.name
-
-            # object_id is the pk value (e.g., uri, name, label for NeoModel nodes)
-            # Query directly using NeoModel's get method with the pk field
-            obj = self.model.objects.get(**{pk_field_name: object_id})
-            return obj
-        except (self.model.DoesNotExist, Exception) as e:
-            # NeoModel may raise DoesNotExist or other exceptions
-            # Check if it's a "not found" type exception
-            if 'not found' in str(e).lower() or 'does not exist' in str(e).lower():
-                from django.http import Http404
-                raise Http404(
-                    f"{self.model._meta.verbose_name} with pk={object_id} does not exist."
-                )
-            # For other exceptions, log and re-raise
-            logger.error(
-                f"Exception in {self.__class__.__name__}.get_object for "
-                f"{self.model.__name__}: {e}",
-                exc_info=True,
-                stack_info=True
-            )
             raise
