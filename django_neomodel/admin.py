@@ -6,10 +6,12 @@ import traceback
 from typing import Any
 
 from django.contrib.admin import ModelAdmin
+from django.contrib.admin.options import IncorrectLookupParameters
 from django.contrib.admin.views.main import ChangeList
 from django.core.paginator import InvalidPage
 from django.http import HttpRequest
 from django.utils.html import format_html
+from django.utils.text import smart_split, unescape_string_literal
 
 from neomodel.match_q import Q, QBase
 from neomodel.sync_.match import NodeSet
@@ -473,25 +475,72 @@ class DjangoNeoModelAdmin(ModelAdmin):
         return translated_ordering
 
     def get_search_results(self, request, queryset, search_term):
-        """Search using neomodel Q (OR across search_fields) via NodeSet.filter().
+        """Search using neomodel Q, aligned with Django admin search_fields behavior.
+
+        Matches classic Django behavior:
+        - Splits the search query into words via smart_split (quoted phrases stay
+          together, e.g. "john winston" or 'john winston' are one term).
+        - Each word/phrase must appear in at least one of search_fields,
+          case-insensitive (icontains by default).
+        - Equivalent to: (field1 ILIKE '%word1%' OR field2 ILIKE '%word1%') AND
+          (field1 ILIKE '%word2%' OR field2 ILIKE '%word2%') for words word1, word2.
+        - search_fields prefixes: ^ (istartswith), = (iexact), @ (search);
+          no prefix = icontains.
+        See: https://docs.djangoproject.com/en/dev/ref/contrib/admin/#django.contrib.admin.ModelAdmin.search_fields
 
         Subclasses can override; to guarantee the changelist uses your filtered
         queryset, apply search yourself and return (queryset, False) without
         calling super() when search_term is set.
         """
-        if search_term and self.search_fields and len(self.search_fields) > 0:
-            search_kwargs = {
-                f"{field}__icontains": search_term
-                for field in self.search_fields
+        if not search_term or not self.search_fields:
+            return queryset, False
+
+        search_fields = self.get_search_fields(request)
+        if not search_fields:
+            return queryset, False
+
+        def lookup_for_field(field_spec):
+            """Return (field_name, lookup_suffix) for a search_fields entry."""
+            spec = str(field_spec).strip()
+            if spec.startswith("^"):
+                return spec.removeprefix("^"), "istartswith"
+            if spec.startswith("="):
+                return spec.removeprefix("="), "iexact"
+            if spec.startswith("@"):
+                return spec.removeprefix("@"), "search"
+            return spec, "icontains"
+
+        lookups = [lookup_for_field(f) for f in search_fields]
+
+        term_queries = []
+        for bit in smart_split(search_term):
+            if bit.startswith(('"', "'")) and len(bit) >= 2 and bit[0] == bit[-1]:
+                try:
+                    bit = unescape_string_literal(bit)
+                except ValueError:
+                    pass
+            if not bit:
+                continue
+            or_kwargs = {
+                f"{name}__{suffix}": bit
+                for name, suffix in lookups
             }
-            search_q = Q(_connector=Q.OR, **search_kwargs)
-            if hasattr(queryset, "filter"):
-                queryset = queryset.filter(search_q)
-            else:
-                logger.error(
-                    "Queryset for %s has no filter method; cannot apply search.",
-                    self.model.__name__,
-                )
+            term_queries.append(Q(_connector=Q.OR, **or_kwargs))
+
+        if not term_queries:
+            return queryset, False
+
+        search_q = term_queries[0]
+        for tq in term_queries[1:]:
+            search_q = search_q & tq
+
+        if hasattr(queryset, "filter"):
+            queryset = queryset.filter(search_q)
+        else:
+            logger.error(
+                "Queryset for %s has no filter method; cannot apply search.",
+                self.model.__name__,
+            )
         return queryset, False  # no distinct needed for NeoModel
 
     def get_changelist(self, request, **kwargs):
