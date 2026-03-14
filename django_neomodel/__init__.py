@@ -245,8 +245,7 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
             opts.add_field(DjangoField(prop, key), getattr(prop, "private", False))
             if getattr(prop, "primary_key", False):
                 pk_field_name = key
-                # Store the property for Django Admin compatibility
-                setattr(self, '_pk_property', prop)
+                # Mark PK metadata for Django-like compatibility logic.
                 prop.auto_created = True
 
         # Create a proper pk property that returns the actual value
