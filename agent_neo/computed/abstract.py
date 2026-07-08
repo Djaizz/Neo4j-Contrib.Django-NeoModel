@@ -42,7 +42,6 @@ from agent_neo.time.periods import coerce_to_utc, coerce_to_utc_for_neo4j_dateti
 
 from .bulk_persist import BulkPersistItem, persist_many, prefetch_current_by_cache_keys
 from .dependency_registry import (
-    collect_dependency_targets,
     get_computes_design_class,
     get_computed_node_depends_on_slots,
     iter_dependency_managers,

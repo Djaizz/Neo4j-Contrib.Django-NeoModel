@@ -3,9 +3,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, ClassVar, Iterable, LiteralString
 import logging
+from dataclasses import dataclass
+from typing import Any, Iterable, LiteralString
 
 from neomodel.sync_.relationship_manager import RelationshipDefinition
 

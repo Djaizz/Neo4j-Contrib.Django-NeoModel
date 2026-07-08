@@ -294,7 +294,6 @@ class GraphDbConfig:
 
         uri = self.get_resolved_uri()
         username = self.get_resolved_username()
-        password = self.get_resolved_password()
         database = self.get_resolved_database()
         if not uri:
             raise RuntimeError(f"URI not resolved - check environment variable: {self.uri}")

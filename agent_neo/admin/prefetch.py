@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, LiteralString, Optional, TYPE_CHECKING
+from typing import Any, Callable, LiteralString, Optional, TYPE_CHECKING, TypeAlias
 
 from django_neomodel.admin import DjangoNeoModelAdmin
 from neomodel.integration.pandas import to_dataframe
 from neomodel.sync_.database import db
+from neomodel.sync_.match import NodeSet
 from neomodel.sync_.node import StructuredNode
 
 from agent_neo.graph.queries import GraphDbQueryAndReturnHeaderList
@@ -16,8 +17,8 @@ if TYPE_CHECKING:
     from rest_framework.viewsets import ReadOnlyModelViewSet
 
 
-type CypherQueryResultRow = list[Any]
-type PrefetchEntry = dict[str, Any]
+CypherQueryResultRow: TypeAlias = list[Any]
+PrefetchEntry: TypeAlias = dict[str, Any]
 
 
 __all__: tuple[LiteralString, ...] = (

@@ -11,10 +11,7 @@ import logging
 
 from neomodel.sync_.database import db
 
-from agent_neo.computed.registry import (
-    iter_registered_computed_node_classes,
-    iter_registered_design_node_classes,
-)
+from agent_neo.computed.registry import iter_registered_computed_node_classes
 from agent_neo.graph import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from agent_neo.time.periods import TimeGranularity, epoch_seconds
 
@@ -217,8 +214,8 @@ def find_inputs_changed_needs_redo(
         'dependent.cache_key AS cache_key, labels(dependent) AS labels'
     )
     params: dict[str, Any] = {'now': epoch_seconds(now)}
-    if scope_name is not None:
-        params['scope_name'] = scope_name
+    if facility_name is not None:
+        params['scope_name'] = facility_name
 
     def _run() -> list[Any]:
         rows, _ = db.cypher_query(query, params)
@@ -263,7 +260,7 @@ def collect_needs_redo_impacts(*, facility_name: str | None = None) -> list[Casc
         f'{facility_filter}'
         'RETURN elementId(n) AS element_id, n.cache_key AS cache_key, labels(n) AS labels'
     )
-    params = {'scope_name': scope_name} if scope_name is not None else {}
+    params = {'scope_name': facility_name} if facility_name is not None else {}
 
     def _run() -> list[Any]:
         rows, _ = db.cypher_query(query, params)

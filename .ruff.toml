@@ -1,8 +1,4 @@
-[tool.ruff]
 line-length = 88
 
-[tool.ruff.lint.flake8-ignore]
-E302 = true
-E305 = true
-E402 = true
-W504 = true
+[lint]
+ignore = ["E302", "E305", "E402"]
