@@ -39,6 +39,8 @@ __all__: tuple[LiteralString, ...] = (
     'reconnect_graph_db_if_needed',
     'reconnect_neo4j_driver',
     'retry_neo4j_cluster_operation',
+    'connect_graph_db',
+    'set_label_install_callback',
 )
 
 
