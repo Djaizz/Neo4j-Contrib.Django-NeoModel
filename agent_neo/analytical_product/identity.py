@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import LiteralString
 
-from agent_neo.time.periods import TimeGranularity, period_anchor
+from agent_neo.util.datetime import TimeGranularity, period_anchor
 
 
 __all__: tuple[LiteralString, ...] = (

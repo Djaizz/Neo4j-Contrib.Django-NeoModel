@@ -38,7 +38,7 @@ from neomodel.sync_.database import db
 
 from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from agent_neo.models.base import DjangoNeoModelWithCreatedAndUpdatedProps
-from agent_neo.time.periods import coerce_to_utc, coerce_to_utc_for_neo4j_datetime
+from agent_neo.util.datetime import coerce_to_utc, coerce_to_utc_for_neo4j_datetime
 
 from .bulk_persist import BulkPersistItem, persist_many, prefetch_current_by_cache_keys
 from .dependency_registry import (

@@ -8,7 +8,7 @@ scope timezone it resolves to a maturity-clamped sequence of :class:`ComputedSlo
 Rationale: no force-redo/recompute knob — invalidation is only via lineage/freshness gates
 on ensure-on-read.
 
-Window resolution and maturity clamping live in :mod:`agent_neo.time.periods`; this module
+Window resolution and maturity clamping live in :mod:`agent_neo.util.datetime`; this module
 composes them into :class:`ComputeRequest`.
 """
 
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, tzinfo
 from typing import LiteralString
 
-from agent_neo.time.periods import (
+from agent_neo.util.datetime import (
     TELEMETRY_LAG_MATURITY_MINUTES,
     TimeGranularity,
     VALID_TIME_GRANULARITIES,
