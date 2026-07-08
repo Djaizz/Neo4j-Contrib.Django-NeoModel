@@ -1,0 +1,1 @@
+from agent_neo.openapi.schema import DjangoNeoModelAutoSchema

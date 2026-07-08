@@ -4,8 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
-where = ["./"]
+where = ["."]
+include = ["django_neomodel*", "agent_neo*"]
+namespaces = false
 
 [project]
 name = "django_neomodel"
@@ -29,6 +34,8 @@ classifiers = [
 dependencies = [
     'django >= 6.0',
     'neomodel @ git+https://github.com/djaizz/neo4j-contrib.neomodel',
+    'pandas >= 2.0',
+    'tqdm >= 4.0',
 ]
 version='0.2.0'
 
@@ -40,6 +47,12 @@ dev = [
     "pytest>=7.1",
     "pytest-django>=4.5.2",
     "pytest-cov>=4.0",
+]
+agent-openapi = [
+    "drf-spectacular >= 0.27",
+]
+agent-drf = [
+    "djangorestframework >= 3.15",
 ]
 
 [tool.pytest.ini_options]
