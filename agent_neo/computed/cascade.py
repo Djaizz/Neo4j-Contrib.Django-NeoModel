@@ -1,5 +1,6 @@
 """Dependency-aware cascade engine for computed graph nodes."""
 
+
 from __future__ import annotations
 
 import contextvars
@@ -37,15 +38,15 @@ __all__: tuple[LiteralString, ...] = (
 
 log = logging.getLogger(__name__)
 
-#: Upper bound on the transitive dependency walk. SFMIV layering guarantees a
-#: cross-layer DAG (a product depends only on same-or-lower layers), so cycles
-#: are not a real risk; the bound is a defensive guard against pathological
-#: fan-out and any accidental same-layer loop.
+#: Upper bound on the transitive dependency walk. Layered-stack ordering guarantees a
+#: cross-layer DAG (a node depends only on same-or-lower layers), so cycles are not a
+#: real risk; the bound is a defensive guard against pathological fan-out and any
+#: accidental same-layer loop.
 DEFAULT_MAX_CASCADE_DEPTH: int = 25
 
 #: Lineage edge types whose *inbound* traversal reaches dependents of a change:
-#: the unified instance-level ``DEPENDS_ON`` graph plus the ``COMPUTES_CONCEPT``
-#: bridge to each instance's Concept.
+#: the unified instance-level ``DEPENDS_ON`` graph plus the ``computes_design``
+#: bridge to each instance's design node.
 _CASCADE_REL_TYPES: tuple[str, ...] = (
     GraphEdgeKind.DEPENDS_ON.value,
     GraphEdgeKind.COMPUTES_DESIGN.value,
@@ -55,8 +56,7 @@ _CASCADE_REL_TYPES: tuple[str, ...] = (
 def _cypher_lifecycle_in_circulation(node_var: str) -> str:
     """Cypher predicate: node is in circulation (``official`` or ``provisional``, not ``retired``).
 
-    Nodes missing ``lifecycle_status`` are treated as ``official``
-    (``LIFECYCLE-MANAGE/OFFICIAL-or-PROVISIONAL-or-RETIRED.md``).
+    Nodes missing ``lifecycle_status`` are treated as ``official``.
     """
     official_value = NodeLifecycleStatus.OFFICIAL.value
     retired_value = NodeLifecycleStatus.RETIRED.value
@@ -77,16 +77,16 @@ def _AUDIT_UPDATED_SET(node_var: str) -> str:  # noqa: N802 - Cypher-fragment bu
 #: Set while an eager recompute sweep is running so the signal receiver does not
 #: re-mark/re-enter through the retirement saves the sweep itself performs.
 _CASCADE_SUPPRESSED: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    'forge_odb_cascade_suppressed', default=False,
+    'agent_neo_cascade_suppressed', default=False,
 )
 
 
 @dataclass(frozen=True, slots=True)
 class CascadeImpact:
-    """One downstream product marked ``needs_redo`` by a cascade.
+    """One downstream computed graph node marked ``needs_redo`` by a cascade.
 
     ``element_id`` is the Neo4j physical node id (``elementId(n)``) — the stable
-    handle for this *graph node*, distinct from ``cache_key`` (the logical product
+    handle for this *graph node*, distinct from ``cache_key`` (the logical node
     slot). Cascade mark/recompute and de-dup key on ``element_id`` so each node is
     addressed exactly once even when multiple nodes share a slot history.
     """
@@ -312,16 +312,16 @@ def recompute_needs_redo(
     scope: ComputeScope,
     impacts: list[CascadeImpact],
 ) -> dict[str, Any]:
-    """Opt-in eager sweep: recompute marked products in SFMIV dependency order.
+    """Opt-in eager sweep: recompute marked nodes in layered-stack dependency order.
 
     Removes the per-impact N+1: one batched Cypher fetches the request-shaping
     metadata for every impacted node, then impacts are coalesced into one range
     ``ComputeRequest`` per ``(product class, subject_kind, subject_key, time_granularity)``
     cohort (spanning ``[min(local_period_start), max(local_period_end)]``).
-    Groups recompute in SFMIV layer-rank order (fact -> metric -> interpretation
-    -> view) via the product class's ``.get`` — the *same* E5 ensure path used on
-    read, so there is one compute path. Cascade marking is suppressed for the
-    duration so the deactivation saves performed here do not re-enter the marker.
+    Groups recompute in layer-rank order (fact -> metric -> interpretation -> view)
+    via the product class's ``.get`` — the same ensure path used on read, so there
+    is one compute path. Cascade marking is suppressed for the duration so the
+    deactivation saves performed here do not re-enter the marker.
 
     Lazy reads already guarantee eventual convergence; this just forces immediate
     consistency when a caller wants it (e.g. after a known correction batch).
@@ -458,9 +458,9 @@ _REGISTRY_CACHE: dict[str, type] | None = None
 
 
 def _product_class_registry() -> dict[str, type]:
-    """Map ``__label__`` -> migrated product class, built lazily and cached.
+    """Map ``__label__`` -> registered computed node class, built lazily and cached.
 
-    Imported lazily because the product modules import this package; importing
+    Imported lazily because computed node modules import this package; importing
     them at module top level would create a cycle during app initialization.
     """
     global _REGISTRY_CACHE

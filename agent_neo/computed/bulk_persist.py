@@ -1,17 +1,10 @@
-"""Bulk graph persistence for migrated analytical computed products (E10).
+"""Bulk graph persistence for computed graph nodes.
 
-Design (DjangoNeoModel-GraphDB) — bidirectional with:
-  dana/ontologist/odb-governance-harness/necessary-and-sufficient-design/concretized/DjangoNeoModel-GraphDB/
-    bulk-cypher-pipeline.md
-    ensure-path-and-lifecycle.md
-    lineage-cascade-and-signals.md
-    IMPLEMENTATION-CROSSWALK.md
-
-Rationale (``OP : BATCH-QUERIES``): populate-scale and multi-window ``.get`` cannot
-N+1 NeoModel ``save``/``connect``. ``persist_many`` does set-oriented upsert,
-lineage replace, retire-prior, and **owns audit timestamps + cascade-mark parity**
-because raw Cypher bypasses ``save()`` and Django signals.
+Rationale: populate-scale and multi-window ``.get`` cannot N+1 NeoModel ``save``/``connect``.
+``persist_many`` does set-oriented upsert, lineage replace, retire-prior, and **owns audit
+timestamps + cascade-mark parity** because raw Cypher bypasses ``save()`` and Django signals.
 """
+
 
 from __future__ import annotations
 
@@ -53,7 +46,7 @@ T = TypeVar('T')
 
 @dataclass(frozen=True, slots=True)
 class BulkPersistItem:
-    """One computed analytical instance to write in a bulk persistence pass."""
+    """One computed graph node instance to write in a bulk persistence pass."""
 
     identity: ComputedSlotIdentity
     compute_result: ComputedNodeResult
@@ -64,10 +57,9 @@ def persist_many(product_cls: type, scope: ComputeScope, items: list[BulkPersist
     """Persist a computed cohort and return the current nodes keyed by ``cache_key``.
 
     Implements retire-not-mutate at set scale (mint/refresh current, flip prior to
-    ``retired``, no ``SUPERSEDES`` edge — see ``ensure-path-and-lifecycle.md``).
-    Because this path is raw Cypher, it **must** also set ``created``/``updated``
-    (epoch seconds, ``DateTimeProperty``-comparable) and mark impacted dependents —
-    otherwise cascade silently misses bulk writes (``lineage-cascade-and-signals.md``).
+    ``retired``, no ``SUPERSEDES`` edge). Because this path is raw Cypher, it **must** also
+    set ``created``/``updated`` (epoch seconds, ``DateTimeProperty``-comparable) and mark
+    impacted dependents — otherwise cascade silently misses bulk writes.
     """
     if not items:
         return {}
@@ -155,7 +147,7 @@ def prefetch_current_by_cache_keys(product_cls: type, cache_keys: Iterable[str])
 
 
 def _product_kind(product_cls: type, compute_result: ComputedNodeResult) -> str:
-    """Resolve ``product_kind`` from the Concept node or the wired Concept's ``LAYER``."""
+    """Resolve ``product_kind`` from the design node or the wired design node's ``LAYER``."""
     concept = compute_result.computes_design
     if concept is not None:
         concept_product_kind = getattr(concept, 'product_kind', None)
@@ -238,7 +230,7 @@ def _bulk_upsert_nodes(product_cls: type, rows: list[dict[str, Any]], now_epoch_
 
         for cache_key, element_id in retry_neo4j_cluster_operation(
             _run,
-            description=f'bulk upsert {label} analytical instances',
+            description=f'bulk upsert {label} computed instances',
             reconnect=reconnect_neo4j_driver,
         ):
             element_ids_by_cache_key[str(cache_key)] = str(element_id)
@@ -368,7 +360,7 @@ def _bulk_retire_prior_nodes(
             str(row[0])
             for row in retry_neo4j_cluster_operation(
                 _run,
-                description='bulk retire prior analytical instances',
+                description='bulk retire prior computed instances',
                 reconnect=reconnect_neo4j_driver,
             )
         )

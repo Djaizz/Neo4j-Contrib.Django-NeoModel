@@ -1,20 +1,11 @@
-"""Canonical analytical-product identity and the single ``cache_key`` builder (design element E4).
+"""Canonical computed-graph-node identity and the single ``cache_key`` builder.
 
-Every analytical product instance — a Fact Set, Metric Set, Interpretation Set, or View Set —
-is addressed by **one** deterministic logical-slot key. This module is the single source of
-truth for that key (no parallel family-specific builders).
-
-Design (DjangoNeoModel-GraphDB) — bidirectional with:
-  dana/ontologist/odb-governance-harness/necessary-and-sufficient-design/concretized/DjangoNeoModel-GraphDB/
-    identity-request-and-probe.md
-    IMPLEMENTATION-CROSSWALK.md
-
-Also: ``abstract/IDENTITY.md``, ``concretized/IDENTITY-CACHE-KEY.md``.
+Every computed graph node instance is addressed by **one** deterministic logical-slot key.
+This module is the single source of truth for that key (no parallel family-specific builders).
 
 Rationale: the key is **de-versioned** — *which design produced an instance* lives on the
-``COMPUTES_CONCEPT`` edge; *whether it is current* is ``lifecycle_status``. Never bake a
-version token into the key (``LIFECYCLE-MANAGE/NO-SUPERSESSION``). Audit/replay pins a
-Concept via ``ComputeRequest.concept_selection``.
+``computes_design`` edge; *whether it is current* is ``lifecycle_status``. Never bake a
+version token into the key. Audit/replay pins a design node via ``ComputeRequest.concept_selection``.
 """
 
 
@@ -45,12 +36,11 @@ def build_slot_key(
     day_classif: str = 'all',
     hour_classif: str = 'all',
 ) -> str:
-    """The one canonical logical-slot id for any analytical product instance (E4).
+    """The one canonical logical-slot id for any computed graph node instance.
 
-    Driven by ``concretized/IDENTITY-CACHE-KEY.md`` and DjangoNeoModel-GraphDB
-    ``identity-request-and-probe.md``. Format (de-versioned)::
+    Format (de-versioned)::
 
-        {computed_node_class_name}|{facility}|{subject_kind}={subject_key}|{time_granularity}|{period_anchor}
+        {computed_node_class_name}|{scope_name}|{subject_kind}={subject_key}|{time_granularity}|{period_anchor}
 
     When either classification is non-``all`` the key is suffixed with ``|d={day}|h={hour}`` so
     sliced rollups occupy distinct slots; the common unsliced case omits the suffix.
@@ -65,10 +55,10 @@ def build_slot_key(
 
 @dataclass(frozen=True, slots=True)
 class ComputedSlotIdentity:
-    """The fully-resolved coordinates of a single product instance (``abstract/IDENTITY.md``).
+    """The fully-resolved coordinates of a single computed graph node instance.
 
-    A ``ComputeRequest`` resolves to a *sequence* of these (one per period window in its range); each
-    one addresses exactly one logical slot via :attr:`cache_key`.
+    A ``ComputeRequest`` resolves to a *sequence* of these (one per period window in its range);
+    each one addresses exactly one logical slot via :attr:`cache_key`.
     """
 
     computed_node_class_name: str

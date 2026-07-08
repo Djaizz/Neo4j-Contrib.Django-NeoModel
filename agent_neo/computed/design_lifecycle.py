@@ -1,20 +1,12 @@
-"""Concept design evolution — cascade trigger for *design* changes (E6).
+"""Design-node evolution — cascade trigger for design changes.
 
-Design (DjangoNeoModel-GraphDB) — bidirectional with:
-  dana/ontologist/odb-governance-harness/necessary-and-sufficient-design/concretized/DjangoNeoModel-GraphDB/
-    lineage-cascade-and-signals.md
-    ensure-path-and-lifecycle.md
-    IMPLEMENTATION-CROSSWALK.md
+Rationale: never bump a version scalar. Mint a new ``official`` design node and flip the
+prior to ``retired`` (no ``SUPERSEDES`` edge). That ``.save()`` fires signal handlers,
+which mark every instance that ``computes_design`` the retired design node as ``needs_redo``
+— design change converges like data change, without per-family invalidation.
 
-Rationale (``LIFECYCLE-MANAGE/NO-SUPERSESSION``): never bump a version scalar. Mint a new
-``official`` Concept and flip the prior to ``retired`` (no ``SUPERSEDES`` edge). That
-``.save()`` fires ``analytical/_django/signals.py``, which marks every instance that
-``COMPUTES_CONCEPT`` the retired Concept as ``needs_redo`` — design change converges like
-data change, zero per-family invalidation.
-
-Note (gap): design-graph ``DEPENDS_ON_CONCEPT`` is wired here, but instance cascade does
-**not** yet walk that edge (see health assessment / ``lineage-cascade-and-signals.md``).
-Retirement of a producing Concept still fans out via ``COMPUTES_CONCEPT``.
+Note: design-graph ``DEPENDS_ON_DESIGN`` is wired here, but instance cascade does not yet
+walk that edge. Retirement of a producing design node still fans out via ``computes_design``.
 """
 
 
@@ -45,12 +37,12 @@ def promote_concept(
     now: datetime | None = None,
     depends_on_concepts: list[Any] | None = None,
 ) -> Any:
-    """Promote a freshly-built ``current`` Concept to official and retire ``previous``.
+    """Promote a freshly-built ``current`` design node to official and retire ``previous``.
 
-    ``current`` is an unsaved (or freshly created) Concept node for the same logical family;
+    ``current`` is an unsaved (or freshly created) design node for the same logical family;
     it is saved as official, then :func:`retire_concept` retires ``previous`` so the change
     cascades. When ``depends_on_concepts`` is provided, wires
-    ``(current)-[:DEPENDS_ON_CONCEPT]->(dependency)`` edges on the design graph.
+    ``(current)-[:DEPENDS_ON_DESIGN]->(dependency)`` edges on the design graph.
     Returns the now-official ``current`` node.
     """
     current.lifecycle_status = NodeLifecycleStatus.OFFICIAL.value
@@ -64,9 +56,9 @@ def reconnect_concept_depends_on_concepts(
     concept: Any,
     dependency_concepts: list[Any],
 ) -> None:
-    """Replace-all ``DEPENDS_ON_CONCEPT`` edges from ``concept`` to ``dependency_concepts``.
+    """Replace-all ``DEPENDS_ON_DESIGN`` edges from ``concept`` to ``dependency_concepts``.
 
-    Uses NeoModel ``element_id`` for idempotent connect/disconnect. When the Concept class
+    Uses NeoModel ``element_id`` for idempotent connect/disconnect. When the design-node class
     declares ``DEPENDS_ON_DESIGN_RELS``, the first slot's manager name is used; otherwise
     ``depends_on_concept`` or raw Cypher is used.
     """
@@ -119,7 +111,7 @@ def reconnect_concept_depends_on_concepts(
 
     retry_neo4j_cluster_operation(
         _run_disconnect,
-        description='concept DEPENDS_ON_CONCEPT disconnect stale',
+        description='design node DEPENDS_ON_DESIGN disconnect stale',
         reconnect=reconnect_neo4j_driver,
     )
 
@@ -137,7 +129,7 @@ def reconnect_concept_depends_on_concepts(
 
         retry_neo4j_cluster_operation(
             _run_connect,
-            description='concept DEPENDS_ON_CONCEPT connect',
+            description='design node DEPENDS_ON_DESIGN connect',
             reconnect=reconnect_neo4j_driver,
         )
 
@@ -152,13 +144,13 @@ def retire_concept(
     """Retire ``previous`` (no relationship is created between ``current`` and ``previous``).
 
     Saving ``previous`` with ``lifecycle_status='retired'`` is the cascade hook: the ``post_save``
-    receiver marks every instance that ``COMPUTES_CONCEPT`` it ``needs_redo``. ``current`` must
-    already be saved (it is the new official Concept). A no-op if there is no real predecessor
-    (including when ``previous`` and ``current`` are the same Neo4j node).
+    receiver marks every instance that ``computes_design`` it ``needs_redo``. ``current`` must
+    already be saved (it is the new official design node). A no-op if there is no real
+    predecessor (including when ``previous`` and ``current`` are the same Neo4j node).
 
     Same-node detection uses Neo4j ``element_id`` (``elementId(n)`` / NeoModel
     ``node.element_id``) — the physical graph-node handle — not Python object identity
-    and not a logical product ``cache_key``.
+    and not a logical ``cache_key``.
     """
     if previous is None:
         return current
@@ -171,6 +163,6 @@ def retire_concept(
         previous.retired_at = now or datetime.now(tz=UTC)
     if reason and hasattr(type(previous), 'retirement_reason'):
         previous.retirement_reason = reason
-    previous.save()  # fires post_save -> cascade marks COMPUTES_CONCEPT instances ``needs_redo``
+    previous.save()  # fires post_save -> cascade marks computes_design instances needs_redo
 
     return current

@@ -1,5 +1,6 @@
 """OpenAPI / drf-spectacular integrations (optional extra ``agent-openapi``)."""
 
+
 from __future__ import annotations
 
 from typing import LiteralString

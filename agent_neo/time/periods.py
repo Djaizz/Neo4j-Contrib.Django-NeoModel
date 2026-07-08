@@ -1,5 +1,6 @@
 """Scope-local calendar dates and datetime ranges for populate and rollups."""
 
+
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
@@ -44,7 +45,7 @@ TELEMETRY_LAG_MATURITY_MINUTES: int = 30
 
 
 class TimeGranularity(StrEnum):
-    """Canonical time time_granularities for period windows and analytical products."""
+    """Canonical time granularities for period windows and computed graph nodes."""
 
     HOURLY = 'hourly'
     DAILY = 'daily'

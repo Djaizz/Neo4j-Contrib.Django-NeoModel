@@ -1,4 +1,6 @@
 """Django Admin search helpers for NeoModel NodeSets."""
+
+
 from __future__ import annotations
 from typing import LiteralString
 from neomodel.match_q import Q

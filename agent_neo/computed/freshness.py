@@ -1,21 +1,15 @@
-"""Serving-side time-freshness policy for the unified ``.get(request)`` path (E7).
+"""Serving-side time-freshness policy for the unified ``.get(request)`` path.
 
 Time-freshness answers a **serving** question for the caller's enquiry period:
 
-    Should I return this stored Analytical Product instance, or obtain a newer one
+    Should I return this stored computed graph node instance, or obtain a newer one
     that is more appropriate for the time period being asked about?
 
-It is **not** ``needs_redo`` (lineage / upstream / Concept currency requires recompute)
+It is **not** ``needs_redo`` (lineage / upstream / design-node currency requires recompute)
 and **not** maturity (may an open-ended window include an in-progress period?).
 
-Design (DjangoNeoModel-GraphDB) — bidirectional with:
-  dana/ontologist/odb-governance-harness/necessary-and-sufficient-design/concretized/DjangoNeoModel-GraphDB/
-    identity-request-and-probe.md
-    ensure-path-and-lifecycle.md
-    IMPLEMENTATION-CROSSWALK.md
-
-Also: ``!-REQUIREMENTS/PRESENT/ANALYTICAL-FRESHNESS.md``, ``abstract/FRESHNESS-AND-MATURITY.md``.
-Enforced in :mod:`...mixin` via :class:`ComputeRequest.freshness` / ``_is_age_fresh``.
+Enforced in :mod:`agent_neo.computed.abstract` via :class:`ComputeRequest.freshness` /
+``_is_age_fresh``.
 """
 
 
@@ -34,7 +28,7 @@ __all__: tuple[LiteralString, ...] = (
 
 @dataclass(frozen=True, slots=True)
 class FreshnessPolicy:
-    """How long a stored instance may be served before a newer one is preferred (E7).
+    """How long a stored instance may be served before a newer one is preferred.
 
     ``max_staleness`` bounds how old ``computed_at`` may be while the stored instance
     is still considered an appropriate answer for the caller's enquiry. When age exceeds

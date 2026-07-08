@@ -1,5 +1,6 @@
 """Compute scope protocol."""
 
+
 from __future__ import annotations
 
 from datetime import tzinfo

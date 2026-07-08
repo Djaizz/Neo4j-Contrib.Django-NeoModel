@@ -1,5 +1,6 @@
 """Shared utilities for agent_neo."""
 
+
 from __future__ import annotations
 
 from typing import LiteralString

@@ -1,4 +1,6 @@
 """Batch Cypher prefetch helpers for Django Admin and DRF."""
+
+
 from __future__ import annotations
 from typing import Any, Callable, LiteralString, Optional, TYPE_CHECKING
 from django_neomodel.admin import DjangoNeoModelAdmin

@@ -1,25 +1,15 @@
-"""The canonical :class:`ComputeRequest` for the unified ``.get(request)`` path (E4/E5/E7).
+"""The canonical :class:`ComputeRequest` for the unified ``.get(request)`` path.
 
-A ``ComputeRequest`` is the *only* way to ask for an analytical product. It carries identity
-coordinates (facility is implicit, subject, period bounds, time_granularity, day/hour
-classif, Concept selection) plus serving-side time-freshness (distinct from lineage
-``needs_redo``). Given the facility timezone it resolves to a maturity-clamped sequence
-of :class:`ComputedSlotIdentity` slots.
+A ``ComputeRequest`` is the *only* way to ask for a computed graph node. It carries identity
+coordinates (scope, subject, period bounds, time_granularity, day/hour classif, design node
+selection) plus serving-side time-freshness (distinct from lineage ``needs_redo``). Given the
+scope timezone it resolves to a maturity-clamped sequence of :class:`ComputedSlotIdentity` slots.
 
-Rationale (``OP : ANALYTICAL-NO-FORCE-REDO-ARGS``): no force-redo/recompute knob — invalidation
-is only via lineage/freshness gates on ensure-on-read.
+Rationale: no force-redo/recompute knob — invalidation is only via lineage/freshness gates
+on ensure-on-read.
 
-Design (DjangoNeoModel-GraphDB) — bidirectional with:
-  dana/ontologist/odb-governance-harness/necessary-and-sufficient-design/concretized/DjangoNeoModel-GraphDB/
-    identity-request-and-probe.md
-    ensure-path-and-lifecycle.md
-    IMPLEMENTATION-CROSSWALK.md
-
-Also: ``abstract/GET-ENSURE-PATH.md``, ``abstract/FRESHNESS-AND-MATURITY.md``,
-``!-REQUIREMENTS/PRESENT/ANALYTICAL-FRESHNESS.md``.
-
-Window resolution and maturity clamping live in :mod:`agent_neo.time.periods`; this
-module composes them into :class:`ComputeRequest`.
+Window resolution and maturity clamping live in :mod:`agent_neo.time.periods`; this module
+composes them into :class:`ComputeRequest`.
 """
 
 
@@ -46,15 +36,16 @@ __all__: tuple[LiteralString, ...] = ('ComputeRequest',)
 
 @dataclass(frozen=True, slots=True)
 class ComputeRequest:
-    """A single, canonical ask for an analytical product (the only entry-point argument).
+    """A single, canonical ask for a computed graph node (the only entry-point argument).
 
-    ``scope_name`` is usually taken from the active :class:`~scope.scope.ComputeScope`
+    ``scope_name`` is usually taken from the active :class:`~agent_neo.computed.scope.ComputeScope`
     rather than passed by callers. ``subject_kind``/``subject_key`` name the topology subject
-    (meter, floor, building, whole_site, zone, plant, asset, …). Period bounds are facility-local
-    and may be open-ended; ``None`` bounds resolve to the latest mature period (E7) at
-    ``time_granularity``. ``concept_selection`` is ``'current'`` for normal reads — a sentinel meaning
-    "whichever Concept is currently in force, ``official`` or ``provisional``" — or a concrete
-    ``concept_key`` to pin a historical (possibly ``retired``) computation for audit/replay.
+    (meter, floor, building, whole_site, zone, plant, asset, …). Period bounds are scope-local
+    and may be open-ended; ``None`` bounds resolve to the latest mature period at
+    ``time_granularity``. ``concept_selection`` is ``'current'`` for normal reads — a sentinel
+    meaning "whichever design node is currently in force, ``official`` or ``provisional``" — or
+    a concrete ``concept_key`` to pin a historical (possibly ``retired``) computation for
+    audit/replay.
     """
 
     subject_kind: str
@@ -82,12 +73,12 @@ class ComputeRequest:
         now: datetime | None = None,
         maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
     ) -> list[ComputedSlotIdentity]:
-        """Resolve this request to its maturity-clamped sequence of product-instance identities.
+        """Resolve this request to its maturity-clamped sequence of computed-node identities.
 
-        Maturity (``DATETIME : MATURITY-DEF`` / E7) is a *produceability* gate — may we compute
-        an open-ended window yet? — not the serving-side age gate in :class:`FreshnessPolicy`.
-        Open-ended / over-reaching bounds clamp to the latest mature period; older explicit
-        bounds pass through. One identity per aligned period in the resolved range.
+        Maturity is a *produceability* gate — may we compute an open-ended window yet? — not
+        the serving-side age gate in :class:`FreshnessPolicy`. Open-ended / over-reaching bounds
+        clamp to the latest mature period; older explicit bounds pass through. One identity per
+        aligned period in the resolved range.
         """
         local_from, local_to_exclusive = resolve_window_for_time_granularity(
             self.local_period_start,

@@ -1,4 +1,6 @@
 """Environment placeholder resolution for graph configuration."""
+
+
 from __future__ import annotations
 
 import os

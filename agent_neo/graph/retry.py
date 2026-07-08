@@ -1,3 +1,6 @@
+"""Neo4j cluster retry helpers."""
+
+
 from __future__ import annotations
 
 from typing import LiteralString

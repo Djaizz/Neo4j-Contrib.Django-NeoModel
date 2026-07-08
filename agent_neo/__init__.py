@@ -1,5 +1,6 @@
 """Agent graph utilities for Django + NeoModel applications."""
 
+
 from __future__ import annotations
 
 from typing import LiteralString

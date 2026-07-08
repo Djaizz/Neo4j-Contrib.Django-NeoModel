@@ -1,5 +1,6 @@
 """Timestamped NeoModel base and Neo4j datetime coercion helpers."""
 
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timezone

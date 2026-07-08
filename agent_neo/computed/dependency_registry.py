@@ -1,5 +1,6 @@
 """Declarative dependency registries for computed graph node classes."""
 
+
 from __future__ import annotations
 
 import logging
@@ -38,7 +39,7 @@ _VALIDATED: bool = False
 
 @dataclass(frozen=True, slots=True)
 class DependencySlot:
-    """One upstream dependency edge declared on a product or Concept class."""
+    """One upstream dependency edge declared on a computed node or design-node class."""
 
     target_class: type
     manager_name: str
@@ -46,7 +47,7 @@ class DependencySlot:
 
 
 def get_computed_node_depends_on_slots(product_cls: type) -> tuple[DependencySlot, ...]:
-    """Return the ``DEPENDS_ON_RELS`` registry for a computed-product product class."""
+    """Return the ``DEPENDS_ON_RELS`` registry for a computed graph node class."""
     cached_slots = getattr(product_cls, '_DEPENDS_ON_RELS_CACHE', None)
     if cached_slots is not None:
         return cached_slots
@@ -63,10 +64,10 @@ def get_computed_node_depends_on_slots(product_cls: type) -> tuple[DependencySlo
 
 
 def get_computes_design_class(product_cls: type) -> type:
-    """Return the Concept node class wired by the product's ``COMPUTES_CONCEPT`` relationship."""
-    cached_concept_class = getattr(product_cls, '_COMPUTES_CONCEPT_CLS_CACHE', None)
-    if cached_concept_class is not None:
-        return cached_concept_class
+    """Return the design-node class wired by the product's ``computes_design`` relationship."""
+    cached_design_node_class = getattr(product_cls, '_COMPUTES_DESIGN_CLS_CACHE', None)
+    if cached_design_node_class is not None:
+        return cached_design_node_class
     computes_design_rel_name = getattr(product_cls, 'COMPUTES_DESIGN_REL', 'computes_design')
     relationship_manager = getattr(product_cls, computes_design_rel_name, None)
     if relationship_manager is None or not isinstance(relationship_manager, RelationshipDefinition):
@@ -77,12 +78,12 @@ def get_computes_design_class(product_cls: type) -> type:
         relationship_manager,
         owning_class=product_cls,
     )
-    product_cls._COMPUTES_CONCEPT_CLS_CACHE = concept_class
+    product_cls._COMPUTES_DESIGN_CLS_CACHE = concept_class
     return concept_class
 
 
 def get_design_depends_on_design_slots(concept_cls: type) -> tuple[DependencySlot, ...]:
-    """Return the ``DEPENDS_ON_DESIGN_RELS`` registry for a Concept class."""
+    """Return the ``DEPENDS_ON_DESIGN_RELS`` registry for a design-node class."""
     registry = getattr(concept_cls, 'DEPENDS_ON_DESIGN_RELS', None)
     if registry is None:
         return ()
@@ -236,7 +237,7 @@ def validate_computed_node_dependency_registry(product_cls: type) -> list[str]:
 
 
 def validate_design_dependency_registry(concept_cls: type) -> list[str]:
-    """Validate ``DEPENDS_ON_DESIGN_RELS`` against Concept ``RelationshipTo`` managers."""
+    """Validate ``DEPENDS_ON_DESIGN_RELS`` against design-node ``RelationshipTo`` managers."""
     errors: list[str] = []
     class_name = getattr(concept_cls, '__name__', repr(concept_cls))
     declared_slots = get_design_depends_on_design_slots(concept_cls)
@@ -278,7 +279,7 @@ def validate_design_dependency_registry(concept_cls: type) -> list[str]:
 
 
 def validate_all_dependency_registries(*, strict: bool = True) -> list[str]:
-    """Validate dependency registries for all migrated product and Concept classes."""
+    """Validate dependency registries for all registered computed and design-node classes."""
     errors: list[str] = []
     for product_cls in iter_registered_computed_node_classes():
         get_computed_node_depends_on_slots(product_cls)
@@ -289,7 +290,7 @@ def validate_all_dependency_registries(*, strict: bool = True) -> list[str]:
     global _VALIDATED
     _VALIDATED = True
     if errors:
-        message = 'Analytical dependency registry validation failed:\n' + '\n'.join(f'  - {error}' for error in errors)
+        message = 'Computed node dependency registry validation failed:\n' + '\n'.join(f'  - {error}' for error in errors)
         if strict:
             raise RuntimeError(message)
         log.warning(message)

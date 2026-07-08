@@ -1,5 +1,6 @@
 """Django default-database (PostgreSQL) resilience helpers for retired compat paths."""
 
+
 from __future__ import annotations
 
 import logging

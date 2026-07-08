@@ -1,5 +1,6 @@
 """Scope-local calendar dates and datetime ranges."""
 
+
 from __future__ import annotations
 
 from typing import LiteralString

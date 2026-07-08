@@ -1,33 +1,24 @@
-"""The unified analytical-product engine: abstract NeoModel bases + the canonical ``.get(request)`` path.
+"""Computed graph node engine: abstract NeoModel bases + the canonical ``.get(request)`` path.
 
-Design elements **E1, E2, E5, E6, E7, E11**: every computed family inherits
-:class:`AbstractComputedGraphNode`, wires ``computes_design`` (SFMIV layer via the Concept),
-implements ``_compute``, and shares one ensure/lineage/freshness behavior plus a unified instance
-spine. Concept families inherit :class:`AbstractDesignNode`, declare ``LAYER``, and carry
-design-graph ``DEPENDS_ON_DESIGN_RELS`` registries plus shared lifecycle fields. Identity uses
-``cls.__name__`` as ``computed_node_class_name``.
+Every computed family inherits :class:`AbstractComputedGraphNode`, wires ``computes_design``
+(layer via the design node), implements ``_compute``, and shares one ensure/lineage/freshness
+behavior plus a unified instance spine. Design-node families inherit :class:`AbstractDesignNode`,
+declare ``LAYER``, and carry design-graph ``DEPENDS_ON_DESIGN_RELS`` registries plus shared
+lifecycle fields. Identity uses ``cls.__name__`` as ``computed_node_class_name``.
 
-Design (DjangoNeoModel-GraphDB) — bidirectional with:
-  dana/ontologist/odb-governance-harness/necessary-and-sufficient-design/concretized/DjangoNeoModel-GraphDB/
-    ensure-path-and-lifecycle.md
-    identity-request-and-probe.md
-    lineage-cascade-and-signals.md
-    bulk-cypher-pipeline.md
-    IMPLEMENTATION-CROSSWALK.md
-
-Also: ``abstract/GET-ENSURE-PATH.md``. Ensure algorithm::
+Ensure algorithm::
 
     get(request):
-      1. resolve identities (maturity-clamped windows)                            [E5/E7]
+      1. resolve identities (maturity-clamped windows)
       2. for each identity:
-           probe current (official/provisional) instance at cache_key             [E4]
-           if found and valid (lineage + drift + age-fresh) -> serve              [E6/E7]
-           else: _compute; persist; retire prior current (no SUPERSEDES edge)     [E1/E6]
+           probe current (official/provisional) instance at cache_key
+           if found and valid (lineage + drift + age-fresh) -> serve
+           else: _compute; persist; retire prior current (no SUPERSEDES edge)
       3. return instances in identity order
 
-Only Views are servable at the boundary (E11): ``serve`` raises for non-View layers.
-Populate (E10) and cascade recompute reuse this same ``get`` path. Cohort writes go
-through :func:`persist_many` (signals bypassed — cascade-mark parity owned there).
+Only View-layer nodes are servable at the boundary: ``serve`` raises for non-View layers.
+Populate and cascade recompute reuse this same ``get`` path. Cohort writes go through
+:func:`persist_many` (signals bypassed — cascade-mark parity owned there).
 """
 
 
@@ -80,9 +71,8 @@ __all__: tuple[LiteralString, ...] = (
 #: Lineage edge types whose *upstream* target, when ``updated`` more recently than
 #: this instance was ``computed_at``, means the instance ``needs_redo`` (E6/E7
 #: input-drift gate). Mirrors the cascade engine's ``_CASCADE_REL_TYPES``: the
-#: unified instance-level ``DEPENDS_ON`` graph (peer Computed Instances and
-#: ``SourceIoTTelemetrySet`` leaves) plus the ``COMPUTES_CONCEPT`` bridge to
-#: each instance's Concept.
+#: unified instance-level ``DEPENDS_ON`` graph (peer computed instances and
+#: source-layer leaves) plus the ``computes_design`` bridge to each instance's design node.
 _INPUT_REL_PATTERN: str = '|'.join((
     GraphEdgeKind.DEPENDS_ON.value,
     GraphEdgeKind.COMPUTES_DESIGN.value,
@@ -101,27 +91,27 @@ class ComputedNodeResult:
     ``{'kwh': 12.3, 'calculation_method': ...}``). The engine sets identity/lifecycle fields itself.
 
     ``dependency_targets`` maps each declared ``DEPENDS_ON_RELS`` slot's ``manager_name`` to the
-    already-resolved upstream nodes to connect (peer Computed Instances, ``SourceIoTTelemetrySet``
-    leaves, etc.). Keys must match the product class ``DEPENDS_ON_RELS`` registry.
+    already-resolved upstream nodes to connect (peer computed instances, source-layer leaves,
+    etc.). Keys must match the product class ``DEPENDS_ON_RELS`` registry.
     """
 
     payload: dict[str, Any]
     dependency_targets: dict[str, list[Any]] = field(default_factory=dict)
-    #: Single-cardinality provenance edges: the producing Concept (``COMPUTES_CONCEPT``) and the
-    #: topology subject (``FOR_SUBJECT``). ``None`` leaves any existing edge untouched.
+    #: Single-cardinality provenance edges: the producing design node (``computes_design``) and
+    #: the topology subject (``FOR_SUBJECT``). ``None`` leaves any existing edge untouched.
     computes_design: Any | None = None
     for_subject: Any | None = None
 
 
 # ============================================================================
-# Abstract concept base (design-graph DEPENDS_ON_CONCEPT registry + lifecycle)
+# Abstract design-node base (design-graph DEPENDS_ON_DESIGN registry + lifecycle)
 # ============================================================================
 
 class AbstractDesignNode(TimestampedDjangoNode):
-    """Abstract base for Concept nodes: shared lifecycle fields + ``DEPENDS_ON_DESIGN_RELS``.
+    """Abstract base for design nodes: shared lifecycle fields + ``DEPENDS_ON_DESIGN_RELS``.
 
-    Concept subclasses still declare explicit NeoModel ``RelationshipTo`` managers (one per
-    upstream Concept type) and family-specific fields (``concept_key``, ``time_granularity``,
+    Design-node subclasses still declare explicit NeoModel ``RelationshipTo`` managers (one per
+    upstream design-node type) and family-specific fields (``concept_key``, ``time_granularity``,
     etc.). The registry lists every manager so ``promote_concept`` and startup validation can
     discover them without ad-hoc Cypher.
     """
@@ -143,7 +133,7 @@ class AbstractDesignNode(TimestampedDjangoNode):
 
     @classmethod
     def official_concept_defaults(cls, **field_overrides: Any) -> dict[str, Any]:
-        """Return lifecycle + ``product_kind`` defaults for get-or-create of official Concepts."""
+        """Return lifecycle + ``product_kind`` defaults for get-or-create of official design nodes."""
         return {
             'lifecycle_status': NodeLifecycleStatus.OFFICIAL.value,
             'product_kind': cls.LAYER.name,
@@ -152,16 +142,16 @@ class AbstractDesignNode(TimestampedDjangoNode):
 
 
 # ============================================================================
-# Abstract computed-product base (E1 + ensure path + unified spine)
+# Abstract computed graph node base (ensure path + unified spine)
 # ============================================================================
 
 class AbstractComputedGraphNode(TimestampedDjangoNode):
-    """Abstract base for every computed analytical-product NeoModel: spine + unified ensure path.
+    """Abstract base for every computed graph node NeoModel: spine + unified ensure path.
 
     A concrete product class must:
 
     - inherit this class (which provides shared identity/lifecycle fields);
-    - declare a ``computes_design`` ``RelationshipTo`` its Concept (SFMIV layer lives on the Concept);
+    - declare a ``computes_design`` ``RelationshipTo`` its design node (layer lives on the design node);
     - declare its lineage relationship managers and family payload fields;
     - implement :meth:`_compute`.
 
@@ -207,12 +197,12 @@ class AbstractComputedGraphNode(TimestampedDjangoNode):
 
     @classmethod
     def concept_class(cls) -> type[AbstractDesignNode]:
-        """Concept node class for this computed family (from ``COMPUTES_CONCEPT`` relationship)."""
+        """Design-node class for this computed family (from ``computes_design`` relationship)."""
         return get_computes_design_class(cls)
 
     @classmethod
     def layer(cls) -> ComputedNodeLayer:
-        """SFMIV layer for this computed family (delegates to the wired Concept's ``LAYER``)."""
+        """Layer for this computed family (delegates to the wired design node's ``LAYER``)."""
         return cls.concept_class().LAYER
 
     @classmethod
@@ -252,8 +242,8 @@ class AbstractComputedGraphNode(TimestampedDjangoNode):
         """Boundary-checked serving form (E2/E11): Views only."""
         if not cls.layer().is_served:
             raise TypeError(
-                f'{cls.__name__} is a {cls.layer().label}-layer product and cannot be served directly; '
-                'only View products cross the serving boundary (SFMIV).',
+                f'{cls.__name__} is a {cls.layer().label}-layer node and cannot be served directly; '
+                'only View-layer nodes cross the serving boundary.',
             )
         return [cls.to_payload(instance) for instance in cls.get(scope, request)]
 
@@ -276,7 +266,7 @@ class AbstractComputedGraphNode(TimestampedDjangoNode):
 
     @classmethod
     def _compute(cls, scope: ComputeScope, identity: ComputedSlotIdentity, request: ComputeRequest) -> ComputedNodeResult:
-        """Produce the payload + lineage for one product instance. Override per family."""
+        """Produce the payload + lineage for one computed graph node instance. Override per family."""
         raise NotImplementedError(f'{cls.__name__} must implement _compute()')
 
     @classmethod
@@ -342,7 +332,7 @@ class AbstractComputedGraphNode(TimestampedDjangoNode):
 
         rows = retry_neo4j_cluster_operation(
             _run,
-            description='analytical _inputs_need_redo timestamp probe',
+            description='computed _inputs_need_redo timestamp probe',
             reconnect=reconnect_neo4j_driver,
         )
         return bool(rows[0][0]) if rows else False
