@@ -10,4 +10,3 @@ class SimpleTest(DjangoTestCase):
 
     def test_save_model(self):
         thing = Library.objects.create(name=u'Foo')
-

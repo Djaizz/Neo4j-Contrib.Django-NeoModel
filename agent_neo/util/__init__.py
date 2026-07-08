@@ -17,5 +17,3 @@ __all__: tuple[LiteralString, ...] = (
     "parse_env_placeholder_names",
     "resolve_env_placeholder",
 )
-
-

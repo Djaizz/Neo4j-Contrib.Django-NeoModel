@@ -17,5 +17,3 @@ __all__: tuple[LiteralString, ...] = (
     "apply_neo4j_datetime_coercion_patch",
     "coerce_to_fixed_offset_for_neo4j",
 )
-
-

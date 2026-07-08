@@ -269,4 +269,3 @@ This document enumerates all key affordances and interfaces implemented in Djang
 2. Can error handling in `get_changelist()` and `changelist_view()` be simplified or removed?
 3. Are management commands actually used, or can users call NeoModel functions directly?
 4. **For `DjangoNeoModelAdmin` overrides**: Could these be eliminated by fixing incompatibilities at the NodeSet/DjangoNode level instead?
-

@@ -31,5 +31,3 @@ __all__: tuple[LiteralString, ...] = (
     "safe_scalar_from_row",
     "set_prefetch_attrs_from_entry",
 )
-
-

@@ -30,5 +30,3 @@ __all__: tuple[LiteralString, ...] = (
     "register_design_node_class",
     "register_relationship_target_class",
 )
-
-

@@ -46,5 +46,3 @@ def apply_admin_search(
 
 type CypherQueryResultRow = list[Any]
 type PrefetchEntry = dict[str, Any]
-
-

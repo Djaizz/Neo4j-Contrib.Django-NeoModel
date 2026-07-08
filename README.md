@@ -194,4 +194,3 @@ Commands to run tests:
     someapp/tests/test_sanity.py .                                                                                                                                                                                                                         [ 93%]
     someapp/tests/test_signals.py .
     16 passed, 11 warnings in 1.62s
-

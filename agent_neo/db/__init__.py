@@ -21,5 +21,3 @@ __all__: tuple[LiteralString, ...] = (
     "POSTGRES_TRANSIENT_RETRY_DELAY_SECONDS",
     "run_with_postgres_retries",
 )
-
-

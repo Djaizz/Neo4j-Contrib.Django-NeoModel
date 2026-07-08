@@ -67,5 +67,3 @@ __all__: tuple[LiteralString, ...] = (
     "tz_offset_hours_from_tzinfo",
     "tz_offset_key_segment",
 )
-
-

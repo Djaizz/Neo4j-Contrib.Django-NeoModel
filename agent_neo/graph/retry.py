@@ -25,5 +25,3 @@ __all__: tuple[LiteralString, ...] = (
     "is_transient_neo4j_error",
     "retry_neo4j_cluster_operation",
 )
-
-

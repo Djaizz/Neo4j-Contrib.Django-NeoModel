@@ -21,5 +21,3 @@ __all__: tuple[LiteralString, ...] = (
     "reconnect_neo4j_driver",
     "set_label_install_callback",
 )
-
-
