@@ -38,7 +38,7 @@ __all__: tuple[LiteralString, ...] = ('ComputeRequest',)
 class ComputeRequest:
     """A single, canonical ask for a computed graph node (the only entry-point argument).
 
-    ``scope_name`` is usually taken from the active :class:`~agent_neo.computed.scope.ComputeScope`
+    ``scope_name`` is usually taken from the active :class:`~agent_neo.analytical_product.scope.ComputeScope`
     rather than passed by callers. ``subject_kind``/``subject_key`` name the topology subject
     (meter, floor, building, whole_site, zone, plant, asset, …). Period bounds are scope-local
     and may be open-ended; ``None`` bounds resolve to the latest mature period at

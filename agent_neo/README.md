@@ -5,14 +5,14 @@
 - **Timestamped NeoModel base** — automatic `created` / `updated` audit fields
 - **Admin prefetch** — batch Cypher to avoid N+1 in Django Admin and DRF list views
 - **Graph DB helpers** — connection config, query loading, batch execution, cluster retry
-- **Computed graph engine** — ensure-on-read for layered computed nodes with design lifecycle
+- **Analytical product engine** — ensure-on-read for layered computed nodes with design lifecycle
 
 ## Layering
 
 | Package | Role |
 |---------|------|
 | `django_neomodel` | Low-level Django ↔ NeoModel bridge |
-| `agent_neo` | Agent graph patterns (bases, prefetch, graph helpers, computed engine) |
+| `agent_neo` | Agent graph patterns (bases, prefetch, graph helpers, analytical product engine) |
 | Your domain app | Concrete node classes, business products, label registration |
 
 ## Quick start
@@ -45,12 +45,12 @@ config = GraphDbConfig(uri="bolt://localhost:7687", username="neo4j", password="
 config.connect_db(install_labels_and_indexes=True)
 ```
 
-## Computed graph nodes
+## Analytical product nodes
 
 Define layered computed nodes with declarative dependency registries:
 
 ```python
-from agent_neo.computed import (
+from agent_neo.analytical_product import (
     AbstractComputedGraphNode,
     ComputedNodeLayer,
     ComputeRequest,

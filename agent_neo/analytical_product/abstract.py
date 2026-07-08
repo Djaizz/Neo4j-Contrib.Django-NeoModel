@@ -55,7 +55,7 @@ from .identity import ComputedSlotIdentity
 from .request import ComputeRequest
 
 if TYPE_CHECKING:
-    from agent_neo.computed.scope import ComputeScope
+    from agent_neo.analytical_product.scope import ComputeScope
 
     from .dependency_registry import DependencySlot
 

@@ -2,7 +2,7 @@
 
 Cross-family building blocks so every computed node family shares identical layered-stack
 vocabulary, lifecycle, and relationship-type enums. Enums only — ensure-on-read logic lives
-in :mod:`agent_neo.computed.abstract`.
+in :mod:`agent_neo.analytical_product.abstract`.
 
 Rationale: currency is ``lifecycle_status`` alone (no ``SUPERSEDES`` edge). Instance
 dependency graphs use one graph type ``DEPENDS_ON`` even when Python splits managers

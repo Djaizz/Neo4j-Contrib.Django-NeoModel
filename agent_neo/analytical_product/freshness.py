@@ -8,7 +8,7 @@ Time-freshness answers a **serving** question for the caller's enquiry period:
 It is **not** ``needs_redo`` (lineage / upstream / design-node currency requires recompute)
 and **not** maturity (may an open-ended window include an in-progress period?).
 
-Enforced in :mod:`agent_neo.computed.abstract` via :class:`ComputeRequest.freshness` /
+Enforced in :mod:`agent_neo.analytical_product.abstract` via :class:`ComputeRequest.freshness` /
 ``_is_age_fresh``.
 """
 

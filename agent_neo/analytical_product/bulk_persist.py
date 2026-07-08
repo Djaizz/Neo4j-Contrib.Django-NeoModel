@@ -30,7 +30,7 @@ from .enum import (
 from .identity import ComputedSlotIdentity
 
 if TYPE_CHECKING:
-    from agent_neo.computed.scope import ComputeScope
+    from agent_neo.analytical_product.scope import ComputeScope
 
     from .abstract import ComputedNodeResult
 

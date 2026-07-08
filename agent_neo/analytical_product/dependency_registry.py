@@ -9,7 +9,7 @@ from typing import Any, Iterable, LiteralString
 
 from neomodel.sync_.relationship_manager import RelationshipDefinition
 
-from agent_neo.computed.registry import (
+from agent_neo.analytical_product.registry import (
     _EXTRA_RELATIONSHIP_TARGET_RESOLVERS,
     iter_registered_computed_node_classes,
     iter_registered_design_node_classes,

@@ -11,7 +11,7 @@ import logging
 
 from neomodel.sync_.database import db
 
-from agent_neo.computed.registry import iter_registered_computed_node_classes
+from agent_neo.analytical_product.registry import iter_registered_computed_node_classes
 from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from agent_neo.time.periods import TimeGranularity, epoch_seconds
 
@@ -19,7 +19,7 @@ from .enum import GraphEdgeKind, NodeLifecycleStatus
 from .request import ComputeRequest
 
 if TYPE_CHECKING:
-    from agent_neo.computed.scope import ComputeScope
+    from agent_neo.analytical_product.scope import ComputeScope
 
 
 __all__: tuple[LiteralString, ...] = (

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from neomodel import RelationshipTo, StringProperty
 
-from agent_neo.computed.dependency_registry import (
+from agent_neo.analytical_product.dependency_registry import (
     DependencySlot,
     validate_computed_node_dependency_registry,
 )
-from agent_neo.computed.enum import GraphEdgeKind
+from agent_neo.analytical_product.enum import GraphEdgeKind
 from agent_neo.models.base import DjangoNeoModelWithCreatedAndUpdatedProps
 
 
