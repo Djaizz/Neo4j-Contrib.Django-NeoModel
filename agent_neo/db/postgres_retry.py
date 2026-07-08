@@ -3,9 +3,9 @@
 
 from __future__ import annotations
 
+from typing import Callable, LiteralString, TypeVar
 import logging
 import time
-from typing import Callable, LiteralString, TypeVar
 
 from django.db import DatabaseError, InterfaceError, OperationalError, close_old_connections, connection
 

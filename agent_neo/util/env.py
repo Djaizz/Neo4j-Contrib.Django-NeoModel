@@ -3,9 +3,9 @@
 
 from __future__ import annotations
 
+from typing import LiteralString
 import os
 import re
-from typing import LiteralString
 
 
 __all__: tuple[LiteralString, ...] = (

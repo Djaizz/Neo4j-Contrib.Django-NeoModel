@@ -36,24 +36,24 @@ from neomodel.properties import (
 )
 from neomodel.sync_.database import db
 
-from agent_neo.time.periods import coerce_to_utc, coerce_to_utc_for_neo4j_datetime
-from agent_neo.models.base import TimestampedDjangoNode
 from agent_neo.graph import reconnect_neo4j_driver, retry_neo4j_cluster_operation
+from agent_neo.models.base import TimestampedDjangoNode
+from agent_neo.time.periods import coerce_to_utc, coerce_to_utc_for_neo4j_datetime
 
-from .enum import (
-    ComputedNodeLayer,
-    NodeLifecycleStatus,
-    GraphEdgeKind,
-)
+from .bulk_persist import BulkPersistItem, persist_many, prefetch_current_by_cache_keys
 from .dependency_registry import (
     collect_dependency_targets,
     get_computes_design_class,
     get_computed_node_depends_on_slots,
     iter_dependency_managers,
 )
+from .enum import (
+    ComputedNodeLayer,
+    NodeLifecycleStatus,
+    GraphEdgeKind,
+)
 from .identity import ComputedSlotIdentity
 from .request import ComputeRequest
-from .bulk_persist import BulkPersistItem, persist_many, prefetch_current_by_cache_keys
 
 if TYPE_CHECKING:
     from agent_neo.computed.scope import ComputeScope

@@ -6,9 +6,7 @@ from __future__ import annotations
 from typing import LiteralString
 
 from django.db import models
-
 from django_neomodel import DjangoField
-
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import build_basic_type
 from drf_spectacular.types import OpenApiTypes

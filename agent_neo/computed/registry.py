@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import LiteralString
 
+
 _REGISTERED_COMPUTED_NODE_CLASSES: list[type] = []
 _REGISTERED_DESIGN_NODE_CLASSES: list[type] = []
 _EXTRA_RELATIONSHIP_TARGET_RESOLVERS: dict[str, type] = {}

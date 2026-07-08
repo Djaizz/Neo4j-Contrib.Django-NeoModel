@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-import contextvars
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, LiteralString
+import contextvars
+import logging
 
 from neomodel.sync_.database import db
 

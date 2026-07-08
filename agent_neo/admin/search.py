@@ -2,7 +2,9 @@
 
 
 from __future__ import annotations
+
 from typing import LiteralString
+
 from neomodel.match_q import Q
 from neomodel.sync_.match import NodeSet
 
