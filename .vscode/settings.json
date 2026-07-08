@@ -1,0 +1,91 @@
+{
+  "editor.rulers": [88],
+
+  // AUTO-SAVE
+  // =========
+  "files.autoSave": "afterDelay",
+
+  // HIDE CERTAIN DIRECTORIES & FILES
+  // ================================
+  "files.exclude": {
+    // PYTHON & RELATED
+    // ================
+    "**/__pycache__": true, // compiled Python code
+    "**/build": true, // Python package build directory
+    "**/dist": false, // Python package distribution directory
+    "**/*.egg-info": true, // Python package info
+    "**/.mypy_cache": true, // MyPy cache
+    "**/.pytest_cache": true, // PyTest cache
+    "**/.ropeproject": true, // Rope project
+    "**/.ruff_cache": true, // Ruff cache
+    "**/uv.lock": true, // UV project lock file
+    "**/.venv": true, // Virtual environment
+
+    // GIT & RELATED
+    // =============
+    "**/.gitkeep": true, // Git keep file
+
+    // MISC / OTHER
+    // ============
+    "**/.DS_Store": true, // Mac OS X system file
+    "**/Thumbs.db": true, // Windows system file
+  },
+
+  // GIT
+  // ====
+  "git.ignoreLimitWarning": true, // Ignore Git limit warning
+
+  // HANDLE WHITESPACES
+  // ==================
+  "files.trimTrailingWhitespace": true, // Remove trailing whitespace on save
+  "files.insertFinalNewline": true, // Ensure files end with a newline
+  "files.trimFinalNewlines": true, // Remove multiple final newlines
+
+  // PYTHON
+  // ======
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none",
+    "reportUndefinedVariable": "none",
+  },
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": true,
+  "python.linting.pylintArgs": [],
+  "python.linting.flake8Enabled": true,
+  "python.linting.flake8Args": [],
+  "python.linting.mypyEnabled": false,
+  "python.linting.pydocstyleEnabled": true,
+  "python.linting.pycodestyleEnabled": true,
+  "python.linting.pycodestyleArgs": [],
+  "python.linting.prospectorEnabled": true,
+  "python.linting.pylamaEnabled": true,
+  "python.linting.pylamaArgs": [],
+  "python.linting.banditEnabled": true,
+  "python.linting.banditArgs": [],
+
+  // CLAUDE CODE
+  // ===========
+  "claudeCode.allowDangerouslySkipPermissions": true,
+  "claudeCode.autosave": true,
+  "claudeCode.claudeProcessWrapper": "",
+  "claudeCode.disableLoginPrompt": false,
+  "claudeCode.enableNewConversationShortcut": true,
+  "claudeCode.environmentVariables": [],
+  "claudeCode.hideOnboarding": false,
+  "claudeCode.initialPermissionMode": "bypassPermissions",
+  "claudeCode.preferredLocation": "panel",
+  "claudeCode.respectGitIgnore": true,
+  "claudeCode.selectedModel": "default",
+  "claudeCode.useCtrlEnterToSend": false,
+  "claudeCode.usePythonEnvironment": true,
+  "claudeCode.useTerminal": false,
+
+  // CURSOR
+  // ======
+  "cursorpyright.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none",
+    "reportUndefinedVariable": "none"
+  },
+
+  "cursorpyright.analysis.exclude": [],
+  "cursorpyright.analysis.ignore": [],
+}
