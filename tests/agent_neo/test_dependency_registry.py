@@ -9,21 +9,21 @@ from agent_neo.computed.dependency_registry import (
     validate_computed_node_dependency_registry,
 )
 from agent_neo.computed.enum import GraphEdgeKind
-from agent_neo.models.base import TimestampedDjangoNode
+from agent_neo.models.base import DjangoNeoModelWithCreatedAndUpdatedProps
 
 
-class _UpstreamNode(TimestampedDjangoNode):
+class _UpstreamNode(DjangoNeoModelWithCreatedAndUpdatedProps):
     name = StringProperty(required=True)
 
 
-class _ComputedNode(TimestampedDjangoNode):
+class _ComputedNode(DjangoNeoModelWithCreatedAndUpdatedProps):
     DEPENDS_ON_RELS = (
         DependencySlot(target_class=_UpstreamNode, manager_name="depends_on_upstream"),
     )
     depends_on_upstream = RelationshipTo(_UpstreamNode.__name__, GraphEdgeKind.DEPENDS_ON.value)
 
 
-class _BrokenComputedNode(TimestampedDjangoNode):
+class _BrokenComputedNode(DjangoNeoModelWithCreatedAndUpdatedProps):
     DEPENDS_ON_RELS = (
         DependencySlot(target_class=_UpstreamNode, manager_name="missing_manager"),
     )

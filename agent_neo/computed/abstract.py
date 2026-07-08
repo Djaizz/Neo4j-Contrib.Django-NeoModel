@@ -37,7 +37,7 @@ from neomodel.properties import (
 from neomodel.sync_.database import db
 
 from agent_neo.graph import reconnect_neo4j_driver, retry_neo4j_cluster_operation
-from agent_neo.models.base import TimestampedDjangoNode
+from agent_neo.models.base import DjangoNeoModelWithCreatedAndUpdatedProps
 from agent_neo.time.periods import coerce_to_utc, coerce_to_utc_for_neo4j_datetime
 
 from .bulk_persist import BulkPersistItem, persist_many, prefetch_current_by_cache_keys
@@ -106,7 +106,7 @@ class ComputedNodeResult:
 # Abstract design-node base (design-graph DEPENDS_ON_DESIGN registry + lifecycle)
 # ============================================================================
 
-class AbstractDesignNode(TimestampedDjangoNode):
+class AbstractDesignNode(DjangoNeoModelWithCreatedAndUpdatedProps):
     """Abstract base for design nodes: shared lifecycle fields + ``DEPENDS_ON_DESIGN_RELS``.
 
     Design-node subclasses still declare explicit NeoModel ``RelationshipTo`` managers (one per
@@ -144,7 +144,7 @@ class AbstractDesignNode(TimestampedDjangoNode):
 # Abstract computed graph node base (ensure path + unified spine)
 # ============================================================================
 
-class AbstractComputedGraphNode(TimestampedDjangoNode):
+class AbstractComputedGraphNode(DjangoNeoModelWithCreatedAndUpdatedProps):
     """Abstract base for every computed graph node NeoModel: spine + unified ensure path.
 
     A concrete product class must:

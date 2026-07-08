@@ -1,4 +1,4 @@
-"""Timestamped NeoModel base and Neo4j datetime coercion helpers."""
+"""NeoModel base with created/updated audit properties and Neo4j datetime coercion helpers."""
 
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from neomodel.properties import DateTimeNeo4jFormatProperty, DateTimeProperty, P
 
 
 __all__: tuple[LiteralString, ...] = (
-    "TimestampedDjangoNode",
+    "DjangoNeoModelWithCreatedAndUpdatedProps",
     "apply_neo4j_datetime_coercion_patch",
     "coerce_to_fixed_offset_for_neo4j",
 )
@@ -43,7 +43,7 @@ def apply_neo4j_datetime_coercion_patch() -> None:
         DateTimeNeo4jFormatProperty.deflate = _neo4j_datetime_deflate_coerced  # type: ignore[assignment]
 
 
-class TimestampedDjangoNode(DjangoNeoModel):
+class DjangoNeoModelWithCreatedAndUpdatedProps(DjangoNeoModel):
     """Abstract NeoModel base with automatic ``created`` / ``updated`` audit stamps."""
 
     __abstract_node__: bool = True

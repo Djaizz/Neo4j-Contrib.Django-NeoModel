@@ -18,13 +18,13 @@
 ## Quick start
 
 ```python
-from agent_neo.models.base import TimestampedDjangoNode, apply_neo4j_datetime_coercion_patch
+from agent_neo.models.base import DjangoNeoModelWithCreatedAndUpdatedProps, apply_neo4j_datetime_coercion_patch
 from neomodel import StringProperty
 
 apply_neo4j_datetime_coercion_patch()  # optional; call once at startup if you use zoned datetimes
 
 
-class EntityType(TimestampedDjangoNode):
+class EntityType(DjangoNeoModelWithCreatedAndUpdatedProps):
     uri = StringProperty(unique_index=True, required=True)
     label = StringProperty(required=True)
 ```

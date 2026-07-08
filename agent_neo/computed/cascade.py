@@ -65,7 +65,7 @@ def _AUDIT_UPDATED_SET(node_var: str) -> str:  # noqa: N802 - Cypher-fragment bu
     """Cypher ``SET`` fragment that bumps the audit ``updated`` field to ``$now``.
 
     Every raw-Cypher node mutation must keep ``updated`` authoritative (the
-    ``save()`` hook on ``TimestampedDjangoNode`` is bypassed by
+    ``save()`` hook on ``DjangoNeoModelWithCreatedAndUpdatedProps`` is bypassed by
     direct Cypher). Callers must bind a ``$now`` param (epoch seconds). The node
     is assumed to already exist, so ``created`` is left untouched here; only
     ``MERGE``-style creators set ``created = coalesce(created, $now)``.

@@ -207,7 +207,7 @@ def _deflate_model_properties(product_cls: type, properties: dict[str, Any], now
             continue
         clean_properties[db_property_name] = property_definition.deflate(value)
 
-    # Raw Cypher bypasses the TimestampedDjangoNode save hook.
+    # Raw Cypher bypasses the DjangoNeoModelWithCreatedAndUpdatedProps save hook.
     clean_properties['updated'] = now_epoch_seconds
     return clean_properties
 
