@@ -9,6 +9,7 @@ _REGISTERED_COMPUTED_NODE_CLASSES: list[type] = []
 _REGISTERED_DESIGN_NODE_CLASSES: list[type] = []
 _EXTRA_RELATIONSHIP_TARGET_RESOLVERS: dict[str, type] = {}
 
+
 __all__: tuple[LiteralString, ...] = (
     "iter_registered_computed_node_classes",
     "iter_registered_design_node_classes",

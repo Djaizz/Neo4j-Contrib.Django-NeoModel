@@ -7,4 +7,7 @@ from typing import LiteralString
 
 from agent_neo.graph._core import GRAPH_DB_BATCH_SIZE, batched_cypher_execute
 
+
 __all__: tuple[LiteralString, ...] = ("GRAPH_DB_BATCH_SIZE", "batched_cypher_execute")
+
+

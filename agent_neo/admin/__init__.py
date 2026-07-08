@@ -18,6 +18,7 @@ from agent_neo.admin.prefetch import (
 )
 from agent_neo.admin.search import apply_admin_search
 
+
 __all__: tuple[LiteralString, ...] = (
     "apply_admin_search",
     "attach_prefetch_cache_to_filtered_queryset",
@@ -30,3 +31,5 @@ __all__: tuple[LiteralString, ...] = (
     "safe_scalar_from_row",
     "set_prefetch_attrs_from_entry",
 )
+
+

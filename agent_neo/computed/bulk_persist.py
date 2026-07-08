@@ -41,6 +41,7 @@ __all__: tuple[LiteralString, ...] = (
     'prefetch_current_by_cache_keys',
 )
 
+
 T = TypeVar('T')
 
 

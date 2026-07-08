@@ -10,7 +10,6 @@ from typing import Callable, LiteralString, TypeVar
 from django.db import DatabaseError, InterfaceError, OperationalError, close_old_connections, connection
 
 
-
 __all__: tuple[LiteralString, ...] = (
     "POSTGRES_TRANSIENT_MAX_ATTEMPTS",
     "POSTGRES_TRANSIENT_RETRY_DELAY_SECONDS",
@@ -18,6 +17,7 @@ __all__: tuple[LiteralString, ...] = (
     "POSTGRES_TRANSIENT_MAX_RETRY_DELAY_SECONDS",
     "run_with_postgres_retries",
 )
+
 
 _T = TypeVar("_T")
 

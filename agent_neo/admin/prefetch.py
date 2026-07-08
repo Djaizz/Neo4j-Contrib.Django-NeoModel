@@ -12,12 +12,15 @@ if TYPE_CHECKING:
     from rest_framework.viewsets import ReadOnlyModelViewSet
 type CypherQueryResultRow = list[Any]
 type PrefetchEntry = dict[str, Any]
+
+
 __all__: tuple[LiteralString, ...] = (
     "run_prefetch","safe_list_from_row","safe_scalar_from_row",
     "format_prefetched_count_display","format_prefetched_list_display",
     "format_prefetched_list_display_truncated","format_prefetched_scalar_display",
     "set_prefetch_attrs_from_entry","attach_prefetch_cache_to_filtered_queryset",
 )
+
 
 def run_prefetch(
     admin_or_viewset: DjangoNeoModelAdmin | ReadOnlyModelViewSet,

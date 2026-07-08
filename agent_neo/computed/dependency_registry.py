@@ -32,6 +32,7 @@ __all__: tuple[LiteralString, ...] = (
     'validate_computed_node_dependency_registry',
 )
 
+
 log = logging.getLogger(__name__)
 
 _VALIDATED: bool = False

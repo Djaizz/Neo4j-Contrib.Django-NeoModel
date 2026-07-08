@@ -36,6 +36,7 @@ __all__: tuple[LiteralString, ...] = (
     'recompute_needs_redo',
 )
 
+
 log = logging.getLogger(__name__)
 
 #: Upper bound on the transitive dependency walk. Layered-stack ordering guarantees a

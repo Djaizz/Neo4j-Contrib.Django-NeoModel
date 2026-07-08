@@ -36,6 +36,7 @@ from agent_neo.time.periods import (
     tz_offset_key_segment,
 )
 
+
 __all__: tuple[LiteralString, ...] = (
     "TELEMETRY_LAG_MATURITY_MINUTES",
     "TimeGranularity",
@@ -66,3 +67,5 @@ __all__: tuple[LiteralString, ...] = (
     "tz_offset_hours_from_tzinfo",
     "tz_offset_key_segment",
 )
+
+

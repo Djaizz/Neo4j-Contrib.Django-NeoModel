@@ -7,4 +7,7 @@ from typing import LiteralString
 
 from agent_neo.openapi.schema import DjangoNeoModelAutoSchema
 
+
 __all__: tuple[LiteralString, ...] = ("DjangoNeoModelAutoSchema",)
+
+

@@ -7,11 +7,13 @@ import os
 import re
 from typing import LiteralString
 
+
 __all__: tuple[LiteralString, ...] = (
     "is_env_placeholder",
     "parse_env_placeholder_names",
     "resolve_env_placeholder",
 )
+
 
 # Flexible whitespace: ``${ env : VAR | ALT }``, ``${env:VAR|ALT}``, etc.
 _ENV_PLACEHOLDER_PATTERN = re.compile(

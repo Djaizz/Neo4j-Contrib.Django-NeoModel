@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import Final, LiteralString
 from zoneinfo import ZoneInfo
 
+
 __all__: tuple[LiteralString, ...] = (
     'TimeGranularity',
     'VALID_TIME_GRANULARITIES',

@@ -18,7 +18,6 @@ from typing import LiteralString
 from agent_neo.time.periods import TimeGranularity, period_anchor
 
 
-
 __all__: tuple[LiteralString, ...] = (
     'ComputedSlotIdentity',
     'build_slot_key',

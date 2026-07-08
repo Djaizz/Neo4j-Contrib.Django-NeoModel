@@ -6,7 +6,9 @@ from typing import LiteralString
 from neomodel.match_q import Q
 from neomodel.sync_.match import NodeSet
 
+
 __all__: tuple[LiteralString, ...] = ("apply_admin_search",)
+
 
 def apply_admin_search(
     queryset: NodeSet,
