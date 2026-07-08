@@ -30,7 +30,7 @@ class EntityType(DjangoNeoModelWithCreatedAndUpdatedProps):
 ```
 
 ```python
-from agent_neo.graph import GraphDbConfig, set_label_install_callback
+from agent_neo.graph_db import GraphDbConfig, set_label_install_callback
 from neomodel.sync_.database import db
 
 

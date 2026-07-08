@@ -11,7 +11,7 @@ from neomodel.sync_.database import db
 from neomodel.sync_.match import NodeSet
 from neomodel.sync_.node import StructuredNode
 
-from agent_neo.graph.queries import GraphDbQueryAndReturnHeaderList
+from agent_neo.graph_db.queries import GraphDbQueryAndReturnHeaderList
 
 if TYPE_CHECKING:
     from rest_framework.viewsets import ReadOnlyModelViewSet

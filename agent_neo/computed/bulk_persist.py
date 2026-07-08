@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, LiteralString, TypeVar
 from neomodel.properties import Property
 from neomodel.sync_.database import db
 
-from agent_neo.graph import (
+from agent_neo.graph_db import (
     GRAPH_DB_BATCH_SIZE,
     reconnect_neo4j_driver,
     retry_neo4j_cluster_operation,

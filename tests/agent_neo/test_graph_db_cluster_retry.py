@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_neo.graph._core import (
+from agent_neo.graph_db._core import (
     NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER,
     NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS,
     NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS,
@@ -18,7 +18,7 @@ from agent_neo.graph._core import (
     reconnect_neo4j_driver,
     retry_neo4j_cluster_operation,
 )
-import agent_neo.graph._core as graph_core
+import agent_neo.graph_db._core as graph_core
 
 
 def test_is_transient_neo4j_error_leader_messages() -> None:
@@ -39,7 +39,7 @@ def test_retry_neo4j_cluster_operation_recovers_after_transient(capsys: object) 
             raise Exception("No Leader Found")
         return "ok"
 
-    with patch("agent_neo.graph._core.time.sleep"):
+    with patch("agent_neo.graph_db._core.time.sleep"):
         result = retry_neo4j_cluster_operation(
             flaky,
             description="test op",
@@ -81,11 +81,11 @@ def test_connect_db_default_skips_label_install() -> None:
     config = _graph_db_config()
 
     with (
-        patch("agent_neo.graph._core.retry_neo4j_cluster_operation") as mock_retry,
-        patch("agent_neo.graph._core.db") as mock_db,
-        patch("agent_neo.graph._core.get_config") as mock_get_config,
-        patch("agent_neo.graph._core.is_graph_db_connected", return_value=False),
-        patch("agent_neo.graph._core._install_labels") as mock_install,
+        patch("agent_neo.graph_db._core.retry_neo4j_cluster_operation") as mock_retry,
+        patch("agent_neo.graph_db._core.db") as mock_db,
+        patch("agent_neo.graph_db._core.get_config") as mock_get_config,
+        patch("agent_neo.graph_db._core.is_graph_db_connected", return_value=False),
+        patch("agent_neo.graph_db._core._install_labels") as mock_install,
     ):
         mock_get_config.return_value = MagicMock()
         mock_retry.side_effect = lambda operation, **kwargs: operation()
@@ -97,7 +97,7 @@ def test_connect_db_default_skips_label_install() -> None:
 
 def test_is_graph_db_connected_clears_stale_active_url_on_ping_failure() -> None:
     graph_core._active_database_url = "bolt://neo4j:secret@localhost:7687/neo4j"
-    with patch("agent_neo.graph._core.db") as mock_db:
+    with patch("agent_neo.graph_db._core.db") as mock_db:
         mock_db.cypher_query.side_effect = OSError("defunct connection")
         assert is_graph_db_connected() is False
     assert graph_core._active_database_url is None

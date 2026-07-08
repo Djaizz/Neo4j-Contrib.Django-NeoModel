@@ -17,7 +17,7 @@ from typing import Any, LiteralString
 
 from neomodel.sync_.database import db
 
-from agent_neo.graph import reconnect_neo4j_driver, retry_neo4j_cluster_operation
+from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 
 from .enum import NodeLifecycleStatus, GraphEdgeKind
 
