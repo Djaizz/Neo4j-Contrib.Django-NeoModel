@@ -177,7 +177,7 @@ def mark_impacted_needs_redo(
 def _to_neo4j_datetime(value: datetime) -> Any:
     """Render a tz-aware datetime as a native ``neo4j.time.DateTime`` for Cypher."""
     from neo4j.time import DateTime as Neo4jDateTime
-    from agent_neo.util.django_neomodel import coerce_to_fixed_offset_for_neo4j
+    from agent_neo.util.django_neomodel.models import coerce_to_fixed_offset_for_neo4j
 
     return Neo4jDateTime.from_native(coerce_to_fixed_offset_for_neo4j(value))
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import LiteralString
 
-from agent_neo.util.django_neomodel import DjangoNeoModelWithCreatedAndUpdatedProps, apply_neo4j_datetime_coercion_patch
+from agent_neo.util.django_neomodel.models import DjangoNeoModelWithCreatedAndUpdatedProps, apply_neo4j_datetime_coercion_patch
 
 
 __all__: tuple[LiteralString, ...] = (
