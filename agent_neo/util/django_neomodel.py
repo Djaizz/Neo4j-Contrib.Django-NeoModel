@@ -1,4 +1,4 @@
-"""NeoModel base with created/updated audit properties and Neo4j datetime coercion helpers."""
+"""NeoModel base, datetime coercion helpers, and optional drf-spectacular schema support."""
 
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ __all__: tuple[LiteralString, ...] = (
     "DjangoNeoModelWithCreatedAndUpdatedProps",
     "apply_neo4j_datetime_coercion_patch",
     "coerce_to_fixed_offset_for_neo4j",
+    "DjangoNeoModelAutoSchema",  # noqa: F822 — lazy export via __getattr__
 )
 
 
@@ -79,3 +80,35 @@ class DjangoNeoModelWithCreatedAndUpdatedProps(DjangoNeoModel):
             self.created = datetime.now(tz=UTC)
         self.updated = datetime.now(tz=UTC)
         return super().save(*args, **kwargs)
+
+
+def __getattr__(name: str) -> Any:
+    if name == "DjangoNeoModelAutoSchema":
+        from django.db import models
+        from django_neomodel import DjangoField
+        from drf_spectacular.openapi import AutoSchema
+        from drf_spectacular.plumbing import build_basic_type
+        from drf_spectacular.types import OpenApiTypes
+
+        class DjangoNeoModelAutoSchema(AutoSchema):
+            """
+            Custom AutoSchema that handles DjangoField from django-neomodel.
+
+            When drf-spectacular tries to introspect DjangoField (which is not a
+            django.db.models.Field), it raises an AssertionError. This class
+            catches that and returns a string schema instead.
+            """
+
+            def _map_model_field(self, model_field, direction):
+                if isinstance(model_field, DjangoField):
+                    return build_basic_type(OpenApiTypes.STR)
+
+                if not isinstance(model_field, models.Field):
+                    return build_basic_type(OpenApiTypes.STR)
+
+                return super()._map_model_field(model_field, direction)
+
+        globals()["DjangoNeoModelAutoSchema"] = DjangoNeoModelAutoSchema
+        return DjangoNeoModelAutoSchema
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

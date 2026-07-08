@@ -73,7 +73,7 @@ Use `ComputeRequest` with `scope_name` (your tenant/scope identifier) rather tha
 pip install django_neomodel[agent-openapi,agent-drf]
 ```
 
-- `agent-openapi` — `drf-spectacular` schema helper for `DjangoField`
+- `agent-openapi` — `DjangoNeoModelAutoSchema` in `agent_neo.util.django_neomodel` for `DjangoField`
 - `agent-drf` — reserved for future DRF integrations
 
 ## Neo4j datetime patch
