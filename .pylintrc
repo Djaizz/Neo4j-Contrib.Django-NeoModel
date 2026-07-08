@@ -1,0 +1,6 @@
+disable=
+  invalid-name,
+  line-too-long,
+  missing-class-docstring,
+  missing-function-docstring,
+  missing-module-docstring,

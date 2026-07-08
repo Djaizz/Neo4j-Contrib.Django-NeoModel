@@ -1,0 +1,8 @@
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint.flake8-ignore]
+E302 = true
+E305 = true
+E402 = true
+W504 = true
