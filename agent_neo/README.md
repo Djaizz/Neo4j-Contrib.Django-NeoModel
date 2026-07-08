@@ -18,7 +18,7 @@
 ## Quick start
 
 ```python
-from agent_neo.models.base import DjangoNeoModelWithCreatedAndUpdatedProps, apply_neo4j_datetime_coercion_patch
+from agent_neo.util.django_neomodel import DjangoNeoModelWithCreatedAndUpdatedProps, apply_neo4j_datetime_coercion_patch
 from neomodel import StringProperty
 
 apply_neo4j_datetime_coercion_patch()  # optional; call once at startup if you use zoned datetimes

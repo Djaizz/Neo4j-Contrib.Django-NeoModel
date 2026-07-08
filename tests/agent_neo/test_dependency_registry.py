@@ -9,7 +9,7 @@ from agent_neo.analytical_product.dependency_registry import (
     validate_computed_node_dependency_registry,
 )
 from agent_neo.analytical_product.enum import GraphEdgeKind
-from agent_neo.models.base import DjangoNeoModelWithCreatedAndUpdatedProps
+from agent_neo.util.django_neomodel import DjangoNeoModelWithCreatedAndUpdatedProps
 
 
 class _UpstreamNode(DjangoNeoModelWithCreatedAndUpdatedProps):
