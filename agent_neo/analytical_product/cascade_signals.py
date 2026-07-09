@@ -14,10 +14,13 @@ __all__: tuple[LiteralString, ...] = (
     'build_cascade_change_handler',
     'connect_cascade_signals',
     'is_retired_lifecycle_change',
+    'register_cascade_signals_once',
 )
 
 
 log = logging.getLogger(__name__)
+
+_REGISTERED_ONCE: bool = False
 
 
 def is_retired_lifecycle_change(instance: Any) -> bool:
@@ -84,4 +87,28 @@ def connect_cascade_signals(
             apps=None,
         )
         connected += 1
+    return connected
+
+
+def register_cascade_signals_once(
+    senders: Iterable[type],
+    *,
+    mark_impacted_needs_redo: Callable[..., None],
+    is_cascade_suppressed: Callable[[], bool],
+    dispatch_uid_prefix: str,
+    is_cascade_relevant_change: Callable[[Any], bool] | None = None,
+) -> int:
+    """Idempotent wrapper around ``connect_cascade_signals`` for Django ``AppConfig.ready``."""
+    global _REGISTERED_ONCE
+    if _REGISTERED_ONCE:
+        return 0
+    connected = connect_cascade_signals(
+        senders,
+        mark_impacted_needs_redo=mark_impacted_needs_redo,
+        is_cascade_suppressed=is_cascade_suppressed,
+        dispatch_uid_prefix=dispatch_uid_prefix,
+        is_cascade_relevant_change=is_cascade_relevant_change,
+    )
+    _REGISTERED_ONCE = True
+    log.debug('cascade signals connected once for %d senders', connected)
     return connected
