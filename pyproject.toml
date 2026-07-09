@@ -12,6 +12,9 @@ where = ["."]
 include = ["django_neomodel*", "agent_neo*"]
 namespaces = false
 
+[tool.setuptools.package-data]
+"agent_neo.graph_db" = ["cypher/**/*.cypher"]
+
 [project]
 name = "django_neomodel"
 authors = [{name = "Robin Edwards", email = "robin.ge@gmail.com"}]

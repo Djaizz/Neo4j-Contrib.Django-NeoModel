@@ -9,6 +9,16 @@ from typing import Any, LiteralString
 import json
 import logging
 
+from agent_neo.graph_db.cypher_templates import (
+    FETCH_CACHE_KEYS_BY_SPINE_WINDOW,
+    FETCH_HVAC_HOURLY_SUMMARIES_BY_CACHE_KEYS,
+    FETCH_ROWS_BY_CACHE_KEYS,
+    MERGE_ROWS_BY_CACHE_KEY,
+    MERGE_ROWS_BY_CACHE_KEY_ON_MATCH,
+    PRELOAD_HVAC_HOURLY_SUMMARIES_BY_ASSET_WINDOW,
+    PRELOAD_METER_ROLLUPS_BY_SPINE_WINDOW,
+    PRELOAD_PERIOD_ROLLUPS_BY_SPINE_WINDOW,
+)
 from agent_neo.graph_db.execute import DEFAULT_IN_CHUNK_SIZE, cypher_read, cypher_write, for_each_chunk
 from agent_neo.graph_db.query_bind import bind_label, bind_where_clause
 
@@ -189,7 +199,7 @@ def fetch_period_rollup_cache_keys_by_spine_window_cypher(
     label: str,
     params: dict[str, Any],
     *,
-    fetch_cache_keys_by_spine_window_query: str | Any,
+    fetch_cache_keys_by_spine_window_query: str | Any = FETCH_CACHE_KEYS_BY_SPINE_WINDOW,
 ) -> set[str]:
     """Return existing ``cache_key`` values for a period rollup label in a spine window."""
     query = bind_label(fetch_cache_keys_by_spine_window_query, label)
@@ -201,7 +211,7 @@ def preload_meter_rollups_by_spine_window_cypher(
     label: str,
     params: dict[str, Any],
     *,
-    preload_meter_rollups_by_spine_window_query: str | Any,
+    preload_meter_rollups_by_spine_window_query: str | Any = PRELOAD_METER_ROLLUPS_BY_SPINE_WINDOW,
 ) -> tuple[list[list[Any]], list[str]]:
     """Load meter rollup rows for bulk index construction."""
     query = bind_label(preload_meter_rollups_by_spine_window_query, label)
@@ -212,7 +222,7 @@ def fetch_period_rollup_rows_by_cache_keys_cypher(
     label: str,
     cache_keys: list[str],
     *,
-    fetch_rows_by_cache_keys_query: str | Any,
+    fetch_rows_by_cache_keys_query: str | Any = FETCH_ROWS_BY_CACHE_KEYS,
     chunk_size: int = DEFAULT_IN_CHUNK_SIZE,
 ) -> dict[str, dict[str, Any]]:
     """Batch-fetch period rollup property maps by ``cache_key`` (indexed IN lookup)."""
@@ -234,7 +244,7 @@ def preload_period_rollups_by_spine_window_cypher(
     label: str,
     params: dict[str, Any],
     *,
-    preload_period_rollups_by_spine_window_query: str | Any,
+    preload_period_rollups_by_spine_window_query: str | Any = PRELOAD_PERIOD_ROLLUPS_BY_SPINE_WINDOW,
 ) -> dict[str, dict[str, Any]]:
     """Load all period rollup property maps in a spine window keyed by ``cache_key``."""
     query = bind_label(preload_period_rollups_by_spine_window_query, label)
@@ -246,7 +256,7 @@ def fetch_hvac_hourly_summaries_by_cache_keys_cypher(
     label: str,
     cache_keys: list[str],
     *,
-    fetch_hourly_summaries_by_cache_keys_query: str | Any,
+    fetch_hourly_summaries_by_cache_keys_query: str | Any = FETCH_HVAC_HOURLY_SUMMARIES_BY_CACHE_KEYS,
     chunk_size: int = DEFAULT_IN_CHUNK_SIZE,
 ) -> dict[str, dict[str, Any]]:
     """Batch-fetch hourly HVAC summary rows by ``cache_key``."""
@@ -268,7 +278,7 @@ def preload_hvac_hourly_summaries_by_asset_window_cypher(
     label: str,
     params: dict[str, Any],
     *,
-    preload_hourly_summaries_by_asset_window_query: str | Any,
+    preload_hourly_summaries_by_asset_window_query: str | Any = PRELOAD_HVAC_HOURLY_SUMMARIES_BY_ASSET_WINDOW,
 ) -> dict[str, dict[str, Any]]:
     """Load hourly HVAC summaries for one asset in a local-hour window."""
     query = bind_label(preload_hourly_summaries_by_asset_window_query, label)
@@ -280,8 +290,8 @@ def merge_period_rollup_rows_cypher(
     label: str,
     rows: list[dict[str, Any]],
     *,
-    merge_rows_by_cache_key_query: str,
-    merge_rows_by_cache_key_on_match_query: str,
+    merge_rows_by_cache_key_query: str = MERGE_ROWS_BY_CACHE_KEY,
+    merge_rows_by_cache_key_on_match_query: str = MERGE_ROWS_BY_CACHE_KEY_ON_MATCH,
     chunk_size: int = DEFAULT_IN_CHUNK_SIZE,
     update_on_match: bool = False,
 ) -> int:
