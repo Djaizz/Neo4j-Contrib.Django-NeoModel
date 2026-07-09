@@ -23,9 +23,18 @@ from agent_neo.graph_db._core import (
     retry_neo4j_cluster_operation,
     set_label_install_callback,
 )
+from agent_neo.graph_db.execute import (
+    DEFAULT_DELETE_CHUNK_SIZE,
+    DEFAULT_IN_CHUNK_SIZE,
+    cypher_read,
+    cypher_write,
+    for_each_chunk,
+)
 
 
 __all__: tuple[LiteralString, ...] = (
+    "DEFAULT_DELETE_CHUNK_SIZE",
+    "DEFAULT_IN_CHUNK_SIZE",
     "GRAPH_DB_BATCH_SIZE",
     "NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER",
     "NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS",
@@ -35,6 +44,9 @@ __all__: tuple[LiteralString, ...] = (
     "GraphDbQueryAndReturnHeaderList",
     "batched_cypher_execute",
     "connect_graph_db",
+    "cypher_read",
+    "cypher_write",
+    "for_each_chunk",
     "is_graph_db_connected",
     "is_transient_neo4j_error",
     "load_query",
