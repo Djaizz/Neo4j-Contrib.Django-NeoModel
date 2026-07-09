@@ -7,29 +7,42 @@ from typing import Any, LiteralString, Sequence
 
 from neomodel.sync_.database import db
 
+from agent_neo.analytical_product.enum import GraphEdgeKind
 from agent_neo.util.json_safe import json_safe_structure
 
 
 __all__: tuple[LiteralString, ...] = (
+    'DEFAULT_LINEAGE_RELATIONSHIP_TYPES',
     'build_explain_envelope',
     'explain_lineage_for_rows',
     'explain_lineage_from_cache_key',
 )
 
 
+DEFAULT_LINEAGE_RELATIONSHIP_TYPES: tuple[str, ...] = (
+    GraphEdgeKind.DEPENDS_ON.value,
+    GraphEdgeKind.COMPUTES_CONCEPT.value,
+)
+
+
 def explain_lineage_for_rows(
     rows: list[dict[str, Any]],
     *,
-    lineage_relationship_types: Sequence[str],
+    lineage_relationship_types: Sequence[str] | None = None,
     max_depth: int = 10,
 ) -> dict[str, Any] | None:
     """Explain the first row that carries a ``cache_key``, if any."""
+    resolved_lineage_relationship_types = (
+        DEFAULT_LINEAGE_RELATIONSHIP_TYPES
+        if lineage_relationship_types is None
+        else lineage_relationship_types
+    )
     for row in rows:
         cache_key = str(row.get('cache_key') or '').strip()
         if cache_key:
             return explain_lineage_from_cache_key(
                 cache_key,
-                lineage_relationship_types=lineage_relationship_types,
+                lineage_relationship_types=resolved_lineage_relationship_types,
                 max_depth=max_depth,
             )
     return None
@@ -39,16 +52,21 @@ def build_explain_envelope(
     rows: list[dict[str, Any]],
     *,
     explain: bool,
-    lineage_relationship_types: Sequence[str],
+    lineage_relationship_types: Sequence[str] | None = None,
     max_depth: int = 10,
 ) -> list[dict[str, Any]] | dict[str, Any]:
     """Return plain rows or an envelope with lineage when ``explain`` is requested."""
+    resolved_lineage_relationship_types = (
+        DEFAULT_LINEAGE_RELATIONSHIP_TYPES
+        if lineage_relationship_types is None
+        else lineage_relationship_types
+    )
     if not explain:
         return rows
     envelope: dict[str, Any] = {'rows': rows}
     lineage = explain_lineage_for_rows(
         rows,
-        lineage_relationship_types=lineage_relationship_types,
+        lineage_relationship_types=resolved_lineage_relationship_types,
         max_depth=max_depth,
     )
     if lineage is not None:
@@ -59,16 +77,21 @@ def build_explain_envelope(
 def explain_lineage_from_cache_key(
     cache_key: str,
     *,
-    lineage_relationship_types: Sequence[str],
+    lineage_relationship_types: Sequence[str] | None = None,
     max_depth: int = 10,
 ) -> dict[str, Any]:
     """Return a downward lineage tree from *cache_key* through *lineage_relationship_types*."""
     clean_cache_key = str(cache_key or '').strip()
     if not clean_cache_key:
         raise ValueError('cache_key must not be empty')
+    resolved_lineage_relationship_types = (
+        DEFAULT_LINEAGE_RELATIONSHIP_TYPES
+        if lineage_relationship_types is None
+        else lineage_relationship_types
+    )
     clean_relationship_types = tuple(
         relationship_type.strip()
-        for relationship_type in lineage_relationship_types
+        for relationship_type in resolved_lineage_relationship_types
         if str(relationship_type or '').strip()
     )
     if not clean_relationship_types:

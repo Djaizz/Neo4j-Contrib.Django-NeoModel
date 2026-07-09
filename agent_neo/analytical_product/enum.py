@@ -20,6 +20,7 @@ __all__: tuple[LiteralString, ...] = (
     'ComputedNodeLayer',
     'NodeLifecycleStatus',
     'GraphEdgeKind',
+    'AnalyticalProductRelType',
     )
 
 
@@ -85,7 +86,12 @@ class NodeLifecycleStatus(StrEnum):
 class GraphEdgeKind(StrEnum):
     """Lineage, provenance, and topology edge types for computed graph nodes."""
 
-    DEPENDS_ON_DESIGN = "DEPENDS_ON_CONCEPT"
-    COMPUTES_DESIGN = "COMPUTES_CONCEPT"
+    DEPENDS_ON_CONCEPT = "DEPENDS_ON_CONCEPT"
+    COMPUTES_CONCEPT = "COMPUTES_CONCEPT"
     FOR_SUBJECT = "FOR_SUBJECT"
     DEPENDS_ON = "DEPENDS_ON"
+    DEPENDS_ON_DESIGN = "DEPENDS_ON_CONCEPT"
+    COMPUTES_DESIGN = "COMPUTES_CONCEPT"
+
+
+AnalyticalProductRelType = GraphEdgeKind
