@@ -14,9 +14,12 @@ __all__: tuple[LiteralString, ...] = (
     'VALID_TIME_GRANULARITIES',
     'TELEMETRY_LAG_MATURITY_MINUTES',
     'epoch_seconds',
+    'coerce_to_date',
     'coerce_to_local_tz',
     'coerce_to_utc',
     'coerce_to_utc_for_neo4j_datetime',
+    'complete_calendar_month_windows_in_range',
+    'first_day_of_month',
     'local_tz_identifier',
     'iso_week_start_local_midnight',
     'is_period_mature_for_production',
@@ -24,6 +27,8 @@ __all__: tuple[LiteralString, ...] = (
     'latest_eligible_inclusive_daily_date',
     'latest_eligible_inclusive_month_string',
     'local_datetime_range_for_inclusive_dates',
+    'month_floor',
+    'next_month_first_day',
     'next_month_start',
     'normalize_to_hour_start',
     'parse_local_datetime_from_iso',
@@ -36,6 +41,9 @@ __all__: tuple[LiteralString, ...] = (
     'resolve_monthly_get_month_range',
     'resolve_populate_date_range',
     'resolve_window_for_time_granularity',
+    'shift_months',
+    'start_of_local_day',
+    'start_of_next_local_day',
     'tz_offset_hours_from_tzinfo',
     'tz_offset_key_segment',
 )
@@ -207,6 +215,78 @@ def next_month_start(local_month_start: datetime) -> datetime:
     if local_month_start.month == 12:
         return local_month_start.replace(year=local_month_start.year + 1, month=1)
     return local_month_start.replace(month=local_month_start.month + 1)
+
+
+def first_day_of_month(value: date) -> date:
+    """Return the first calendar day of ``value``'s month."""
+    return value.replace(day=1)
+
+
+def next_month_first_day(value: date) -> date:
+    """Return the first calendar day of the month after ``value``."""
+    if value.month == 12:
+        return date(value.year + 1, 1, 1)
+    return date(value.year, value.month + 1, 1)
+
+
+def shift_months(value: date, *, delta_months: int) -> date:
+    """Shift ``value`` by ``delta_months``; result is always the first day of that month."""
+    month_index = value.year * 12 + (value.month - 1) + delta_months
+    year, zero_based_month = divmod(month_index, 12)
+    return date(year, zero_based_month + 1, 1)
+
+
+def month_floor(local_datetime: datetime) -> datetime:
+    """Truncate ``local_datetime`` to the first day of its month at 00:00."""
+    return local_datetime.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def complete_calendar_month_windows_in_range(
+    range_start: date,
+    range_end_exclusive: date,
+) -> list[tuple[date, date]]:
+    """Return ``(month_first, month_end_exclusive)`` for each fully covered calendar month."""
+    if range_end_exclusive <= range_start:
+        return []
+    windows: list[tuple[date, date]] = []
+    cursor = first_day_of_month(range_start)
+    while cursor < range_end_exclusive:
+        month_end_exclusive = next_month_first_day(cursor)
+        if range_start <= cursor and range_end_exclusive >= month_end_exclusive:
+            windows.append((cursor, month_end_exclusive))
+        cursor = month_end_exclusive
+    return windows
+
+
+def start_of_local_day(local_date: date, facility_timezone: tzinfo) -> datetime:
+    """Return facility-local midnight for ``local_date``."""
+    return datetime(
+        local_date.year,
+        local_date.month,
+        local_date.day,
+        tzinfo=facility_timezone,
+    )
+
+
+def start_of_next_local_day(local_date: date, facility_timezone: tzinfo) -> datetime:
+    """Return exclusive end boundary at start of the day after ``local_date``."""
+    return start_of_local_day(local_date, facility_timezone) + timedelta(days=1)
+
+
+def coerce_to_date(value: date | datetime | str | None) -> date | None:
+    """Coerce ISO date/datetime strings, ``date``, or ``datetime`` to ``date``."""
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    clean = str(value).strip()
+    if not clean:
+        return None
+    if 'T' in clean:
+        return datetime.fromisoformat(clean).date()
+    return date.fromisoformat(clean[:10])
 
 
 def iso_week_start_local_midnight(local_datetime: datetime) -> datetime:
