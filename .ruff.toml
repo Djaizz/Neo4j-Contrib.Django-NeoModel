@@ -1,4 +1,7 @@
 line-length = 88
 
+[format]
+preview = true
+
 [lint]
 ignore = ["E302", "E305", "E402"]
