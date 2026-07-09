@@ -11,7 +11,6 @@ RETURN
   n.point_unit AS point_unit,
   n.local_hour_start AS local_hour_start,
   n.local_hour_end AS local_hour_end,
-  n.algorithm_version AS algorithm_version,
   n.sample_count AS sample_count,
   n.numeric_sample_count AS numeric_sample_count,
   n.coverage_ratio AS coverage_ratio,

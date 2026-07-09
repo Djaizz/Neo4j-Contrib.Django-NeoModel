@@ -1,9 +1,8 @@
 // Preload hourly HVAC point summaries for one asset in a local-hour window.
-// Parameters: facility_name, asset_name, algorithm_version, local_hour_start_gte, local_hour_start_lt
+// Parameters: facility_name, asset_name, local_hour_start_gte, local_hour_start_lt
 MATCH (n:`__LABEL__`)
 WHERE n.facility_name = $facility_name
   AND n.asset_name = $asset_name
-  AND n.algorithm_version = $algorithm_version
   AND n.local_hour_start >= $local_hour_start_gte
   AND n.local_hour_start < $local_hour_start_lt
 RETURN
@@ -15,7 +14,6 @@ RETURN
   n.point_unit AS point_unit,
   n.local_hour_start AS local_hour_start,
   n.local_hour_end AS local_hour_end,
-  n.algorithm_version AS algorithm_version,
   n.sample_count AS sample_count,
   n.numeric_sample_count AS numeric_sample_count,
   n.coverage_ratio AS coverage_ratio,

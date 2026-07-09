@@ -13,6 +13,7 @@ from agent_neo.graph_db import (
     bind_label,
     bind_label_and_property,
     merge_period_rollup_rows_cypher,
+    spine_window_where_clauses,
 )
 from agent_neo.graph_db.cypher_templates import (
     COUNT_NODES_BY_PROPERTY_IN_KEYS,
@@ -56,6 +57,20 @@ def test_preload_period_rollups_by_spine_window_template() -> None:
     query = bind_label(PRELOAD_PERIOD_ROLLUPS_BY_SPINE_WINDOW, 'Test_PeriodRollup')
     assert 'Test_PeriodRollup' in query
     assert 'local_period_start >=' in query
+    assert 'algorithm_version' not in query
+
+
+def test_spine_window_where_clauses_omit_algorithm_version() -> None:
+    clauses, params = spine_window_where_clauses(
+        facility_name='Fac',
+        time_granularity='daily',
+        local_period_start_gte='2026-01-01T00:00',
+        local_period_start_lt='2026-02-01T00:00',
+    )
+    assert 'n.facility_name = $facility_name' in clauses
+    assert 'n.local_period_start >= $local_period_start_gte' in clauses
+    assert 'algorithm_version' not in params
+    assert not any('algorithm_version' in clause for clause in clauses)
 
 
 def test_merge_template_has_unwind() -> None:

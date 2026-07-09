@@ -51,9 +51,3 @@ class PeriodSpineMixin:
         db_property='local_period_end',
         max_length=PERIOD_SPINE_MAX_STRING_LENGTH,
     )
-    algorithm_version: Property = StringProperty(
-        index=True,
-        required=True,
-        db_property='algorithm_version',
-        max_length=PERIOD_SPINE_MAX_STRING_LENGTH,
-    )

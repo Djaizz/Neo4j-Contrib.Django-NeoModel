@@ -1,9 +1,8 @@
 // Preload electricity meter period rollups for aggregation (populate / bulk create).
-// Parameters: spine_window_where params (facility_name, time_granularity, algorithm_version, local_period_start_*)
+// Parameters: spine_window_where params (facility_name, time_granularity, local_period_start_*)
 MATCH (n:`__LABEL__`)
 WHERE n.facility_name = $facility_name
   AND n.time_granularity = $time_granularity
-  AND n.algorithm_version = $algorithm_version
   AND n.local_period_start >= $local_period_start_gte
   AND n.local_period_start < $local_period_start_lt
 RETURN
@@ -13,7 +12,6 @@ RETURN
   n.time_granularity AS time_granularity,
   n.local_period_start AS local_period_start,
   n.local_period_end AS local_period_end,
-  n.algorithm_version AS algorithm_version,
   n.kwh AS kwh,
   n.sample_count AS sample_count,
   n.numeric_sample_count AS numeric_sample_count,

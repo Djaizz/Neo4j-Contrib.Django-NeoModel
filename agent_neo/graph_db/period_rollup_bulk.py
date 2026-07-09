@@ -114,7 +114,6 @@ def spine_window_where_clauses(
     node_alias: str = 'n',
     facility_name: str,
     time_granularity: str | None = None,
-    algorithm_version: str | None = None,
     local_period_start_gte: str | None = None,
     local_period_start_lt: str | None = None,
 ) -> tuple[list[str], dict[str, Any]]:
@@ -124,9 +123,6 @@ def spine_window_where_clauses(
     if time_granularity is not None:
         where_clauses.append(f'{node_alias}.time_granularity = $time_granularity')
         params['time_granularity'] = time_granularity
-    if algorithm_version is not None:
-        where_clauses.append(f'{node_alias}.algorithm_version = $algorithm_version')
-        params['algorithm_version'] = algorithm_version
     if local_period_start_gte is not None:
         where_clauses.append(f'{node_alias}.local_period_start >= $local_period_start_gte')
         params['local_period_start_gte'] = local_period_start_gte
