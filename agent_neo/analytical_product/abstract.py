@@ -40,7 +40,7 @@ from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_opera
 from agent_neo.util.django_neomodel.models import DjangoNeoModelWithCreatedAndUpdatedProps
 from agent_neo.util.datetime import coerce_to_utc, coerce_to_utc_for_neo4j_datetime
 
-from .bulk_persist import BulkPersistItem, persist_many, prefetch_current_by_cache_keys
+from .computed_product_bulk_persist import BulkPersistItem, persist_many, prefetch_current_by_cache_keys
 from .dependency_registry import (
     get_computes_design_class,
     get_computed_node_depends_on_slots,

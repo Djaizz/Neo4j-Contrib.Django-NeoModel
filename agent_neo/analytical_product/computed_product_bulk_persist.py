@@ -372,7 +372,7 @@ def _mark_bulk_changed_nodes(*, changed_element_ids: list[str]) -> None:
     clean_element_ids = list(dict.fromkeys(element_id for element_id in changed_element_ids if element_id))
     if not clean_element_ids:
         return
-    from .cascade import is_cascade_suppressed, mark_impacted_needs_redo
+    from .computed_product_cascade import is_cascade_suppressed, mark_impacted_needs_redo
 
     if is_cascade_suppressed():
         return
