@@ -11,12 +11,9 @@ import logging
 
 from agent_neo.graph_db.cypher_templates import (
     FETCH_CACHE_KEYS_BY_SPINE_WINDOW,
-    FETCH_HVAC_HOURLY_SUMMARIES_BY_CACHE_KEYS,
     FETCH_ROWS_BY_CACHE_KEYS,
     MERGE_ROWS_BY_CACHE_KEY,
     MERGE_ROWS_BY_CACHE_KEY_ON_MATCH,
-    PRELOAD_HVAC_HOURLY_SUMMARIES_BY_ASSET_WINDOW,
-    PRELOAD_METER_ROLLUPS_BY_SPINE_WINDOW,
     PRELOAD_PERIOD_ROLLUPS_BY_SPINE_WINDOW,
 )
 from agent_neo.graph_db.execute import DEFAULT_IN_CHUNK_SIZE, cypher_read, cypher_write, for_each_chunk
@@ -25,14 +22,11 @@ from agent_neo.graph_db.query_bind import bind_label, bind_where_clause
 
 __all__: tuple[LiteralString, ...] = (
     'fetch_cache_keys_by_indexed_filters_cypher',
-    'fetch_hvac_hourly_summaries_by_cache_keys_cypher',
     'fetch_period_rollup_cache_keys_by_spine_window_cypher',
     'fetch_period_rollup_rows_by_cache_keys_cypher',
     'hourly_summary_maps_from_cypher_rows',
     'merge_period_rollup_rows_cypher',
     'neo4j_bulk_timestamps',
-    'preload_hvac_hourly_summaries_by_asset_window_cypher',
-    'preload_meter_rollups_by_spine_window_cypher',
     'preload_period_rollups_by_spine_window_cypher',
     'property_maps_from_cypher_rows',
     'safe_connect_relationship',
@@ -203,17 +197,6 @@ def fetch_period_rollup_cache_keys_by_spine_window_cypher(
     return {str(row[0]) for row in rows if row and row[0]}
 
 
-def preload_meter_rollups_by_spine_window_cypher(
-    label: str,
-    params: dict[str, Any],
-    *,
-    preload_meter_rollups_by_spine_window_query: str | Any = PRELOAD_METER_ROLLUPS_BY_SPINE_WINDOW,
-) -> tuple[list[list[Any]], list[str]]:
-    """Load meter rollup rows for bulk index construction."""
-    query = bind_label(preload_meter_rollups_by_spine_window_query, label)
-    return cypher_read(query, params)
-
-
 def fetch_period_rollup_rows_by_cache_keys_cypher(
     label: str,
     cache_keys: list[str],
@@ -246,40 +229,6 @@ def preload_period_rollups_by_spine_window_cypher(
     query = bind_label(preload_period_rollups_by_spine_window_query, label)
     rows, columns = cypher_read(query, params)
     return property_maps_from_cypher_rows(rows, columns)
-
-
-def fetch_hvac_hourly_summaries_by_cache_keys_cypher(
-    label: str,
-    cache_keys: list[str],
-    *,
-    fetch_hourly_summaries_by_cache_keys_query: str | Any = FETCH_HVAC_HOURLY_SUMMARIES_BY_CACHE_KEYS,
-    chunk_size: int = DEFAULT_IN_CHUNK_SIZE,
-) -> dict[str, dict[str, Any]]:
-    """Batch-fetch hourly HVAC summary rows by ``cache_key``."""
-    if not cache_keys:
-        return {}
-
-    by_key: dict[str, dict[str, Any]] = {}
-    query = bind_label(fetch_hourly_summaries_by_cache_keys_query, label)
-
-    def _fetch_chunk(chunk_keys: list[str]) -> None:
-        rows, columns = cypher_read(query, {'keys': chunk_keys})
-        by_key.update(hourly_summary_maps_from_cypher_rows(rows, columns))
-
-    for_each_chunk(cache_keys, chunk_size=chunk_size, action=_fetch_chunk)
-    return by_key
-
-
-def preload_hvac_hourly_summaries_by_asset_window_cypher(
-    label: str,
-    params: dict[str, Any],
-    *,
-    preload_hourly_summaries_by_asset_window_query: str | Any = PRELOAD_HVAC_HOURLY_SUMMARIES_BY_ASSET_WINDOW,
-) -> dict[str, dict[str, Any]]:
-    """Load hourly HVAC summaries for one asset in a local-hour window."""
-    query = bind_label(preload_hourly_summaries_by_asset_window_query, label)
-    rows, columns = cypher_read(query, params)
-    return hourly_summary_maps_from_cypher_rows(rows, columns)
 
 
 def merge_period_rollup_rows_cypher(

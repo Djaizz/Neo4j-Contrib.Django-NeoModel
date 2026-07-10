@@ -27,13 +27,10 @@ DEFAULT_KPI_PARALLEL_ENABLED = True
 
 
 def _env_value(name: str, *, default: str = '') -> str:
-    """Read ``AGENT_NEO_<name>`` with legacy ``FORGE_ODB_<name>`` fallback."""
+    """Read ``AGENT_NEO_<name>`` environment variable."""
     agent_value = os.environ.get(f'AGENT_NEO_{name}', '').strip()
     if agent_value:
         return agent_value
-    legacy_value = os.environ.get(f'FORGE_ODB_{name}', '').strip()
-    if legacy_value:
-        return legacy_value
     return default
 
 
@@ -98,7 +95,7 @@ def format_kpi_parallel_plan_clause(
     parallel_enabled: bool = DEFAULT_KPI_PARALLEL_ENABLED,
     max_workers: int = DEFAULT_KPI_MAX_WORKERS,
 ) -> str:
-    """Render parallel settings for electricity KPI plan lines."""
+    """Render parallel settings for KPI plan lines."""
     if not kpi_parallel_enabled(default=parallel_enabled):
         return 'parallel=off'
     resolved_workers = kpi_parallel_workers(
@@ -121,7 +118,7 @@ def parallel_map_asset_rollups(
     progress_desc: str | None = None,
     max_workers: int = DEFAULT_KPI_MAX_WORKERS,
 ) -> list[dict[str, Any]]:
-    """Fan out per-asset HVAC rollup work with conservative worker limits."""
+    """Fan out per-asset rollup work with conservative worker limits."""
     if not asset_names:
         return []
     resolved_progress_desc = progress_desc or layer_name.replace('_', ' ')
@@ -144,7 +141,7 @@ def parallel_map_asset_rollups(
     rollups_by_asset: dict[str, list[dict[str, Any]]] = {}
     with ThreadPoolExecutor(
         max_workers=resolved_workers,
-        thread_name_prefix=layer_name.replace('_', '-')[:12] or 'hvac-rollup',
+        thread_name_prefix=layer_name.replace('_', '-')[:12] or 'rollup',
     ) as executor:
         futures = {
             executor.submit(compute_for_asset, asset_name): asset_name

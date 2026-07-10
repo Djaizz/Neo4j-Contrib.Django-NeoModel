@@ -15,17 +15,14 @@ import threading
 import time
 
 
-_NEO_LABEL_PREFIXES: Final[tuple[str, ...]] = ('ForgeODB_Analytical_',)
+_NEO_LABEL_PREFIXES: Final[tuple[str, ...]] = ()
 
 
 def _env_value(name: str, *, default: str = '') -> str:
-    """Read ``AGENT_NEO_<name>`` with legacy ``FORGE_ODB_<name>`` fallback."""
+    """Read ``AGENT_NEO_<name>`` environment variable."""
     agent_value = os.environ.get(f'AGENT_NEO_{name}', '').strip()
     if agent_value:
         return agent_value
-    legacy_value = os.environ.get(f'FORGE_ODB_{name}', '').strip()
-    if legacy_value:
-        return legacy_value
     return default
 
 
