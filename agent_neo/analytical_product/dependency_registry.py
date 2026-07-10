@@ -84,8 +84,8 @@ def get_computes_design_class(product_cls: type) -> type:
 
 
 def get_design_depends_on_design_slots(concept_cls: type) -> tuple[DependencySlot, ...]:
-    """Return the ``DEPENDS_ON_DESIGN_RELS`` registry for a design-node class."""
-    registry = getattr(concept_cls, 'DEPENDS_ON_DESIGN_RELS', None)
+    """Return the ``DEPENDS_ON_CONCEPT_RELS`` registry for a design-node class."""
+    registry = getattr(concept_cls, 'DEPENDS_ON_CONCEPT_RELS', None)
     if registry is None:
         return ()
     return tuple(registry)
@@ -238,20 +238,20 @@ def validate_computed_node_dependency_registry(product_cls: type) -> list[str]:
 
 
 def validate_design_dependency_registry(concept_cls: type) -> list[str]:
-    """Validate ``DEPENDS_ON_DESIGN_RELS`` against design-node ``RelationshipTo`` managers."""
+    """Validate ``DEPENDS_ON_CONCEPT_RELS`` against design-node ``RelationshipTo`` managers."""
     errors: list[str] = []
     class_name = getattr(concept_cls, '__name__', repr(concept_cls))
     declared_slots = get_design_depends_on_design_slots(concept_cls)
     declared_manager_names = {slot.manager_name for slot in declared_slots}
 
     for slot in declared_slots:
-        if slot.rel_type != GraphEdgeKind.DEPENDS_ON_DESIGN:
+        if slot.rel_type != GraphEdgeKind.DEPENDS_ON_CONCEPT:
             errors.append(
                 f'{class_name}: concept slot {slot.manager_name!r} must use DEPENDS_ON_CONCEPT rel_type',
             )
         manager = getattr(concept_cls, slot.manager_name, None)
         if manager is None:
-            errors.append(f'{class_name}: DEPENDS_ON_DESIGN_RELS slot {slot.manager_name!r} has no manager')
+            errors.append(f'{class_name}: DEPENDS_ON_CONCEPT_RELS slot {slot.manager_name!r} has no manager')
             continue
         if not isinstance(manager, RelationshipDefinition):
             errors.append(
@@ -269,11 +269,11 @@ def validate_design_dependency_registry(concept_cls: type) -> list[str]:
     for attribute_name, attribute_value in vars(concept_cls).items():
         if not isinstance(attribute_value, RelationshipDefinition):
             continue
-        if _relationship_rel_type_value(attribute_value) != GraphEdgeKind.DEPENDS_ON_DESIGN.value:
+        if _relationship_rel_type_value(attribute_value) != GraphEdgeKind.DEPENDS_ON_CONCEPT.value:
             continue
         if attribute_name not in declared_manager_names:
             errors.append(
-                f'{class_name}: RelationshipTo manager {attribute_name!r} is not listed in DEPENDS_ON_DESIGN_RELS',
+                f'{class_name}: RelationshipTo manager {attribute_name!r} is not listed in DEPENDS_ON_CONCEPT_RELS',
             )
 
     return errors

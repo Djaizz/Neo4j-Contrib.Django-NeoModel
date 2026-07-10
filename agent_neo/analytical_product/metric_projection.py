@@ -6,8 +6,8 @@ from __future__ import annotations
 from typing import Any, Callable, LiteralString, Protocol, runtime_checkable
 
 from agent_neo.analytical_product.abstract import (
-    AbstractComputedGraphNode,
-    AbstractDesignNode,
+    AbstractAnalyticalComputedProduct,
+    AbstractAnalyticalConcept,
     ComputedNodeResult,
 )
 from agent_neo.analytical_product.enum import NodeLifecycleStatus
@@ -64,7 +64,7 @@ def project_metric_instance_to_payload(
 
 
 def serve_multi_row_metric_projection(
-    metric_set_class: type[AbstractComputedGraphNode],
+    metric_set_class: type[AbstractAnalyticalComputedProduct],
     compute_scope: ComputeScope,
     request: ComputeRequest,
     *,
@@ -76,12 +76,12 @@ def serve_multi_row_metric_projection(
 
 
 def ensure_official_concept(
-    concept_class: type[AbstractDesignNode],
+    concept_class: type[AbstractAnalyticalConcept],
     *,
     concept_key: str,
     analytical_product_class_name: str,
     metric_set_class_name: str,
-) -> AbstractDesignNode:
+) -> AbstractAnalyticalConcept:
     """Get or create an OFFICIAL concept anchor for a metric projection ViewSet."""
     concept = concept_class.nodes.get_or_none(concept_key=concept_key)
     if concept is None:
@@ -99,7 +99,7 @@ def ensure_official_concept(
 
 
 def serve_projected_payload_rows(
-    view_set_class: type[AbstractComputedGraphNode],
+    view_set_class: type[AbstractAnalyticalComputedProduct],
     compute_scope: ComputeScope,
     request: ComputeRequest,
 ) -> list[dict[str, Any]]:

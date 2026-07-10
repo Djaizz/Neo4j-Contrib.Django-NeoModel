@@ -51,13 +51,13 @@ Define layered computed nodes with declarative dependency registries:
 
 ```python
 from agent_neo.analytical_product import (
-    AbstractComputedGraphNode,
+    AbstractAnalyticalComputedProduct,
     ComputedNodeLayer,
     ComputeRequest,
     register_computed_node_class,
 )
 
-class RelatedItemMetricSet(AbstractComputedGraphNode):
+class RelatedItemMetricSet(AbstractAnalyticalComputedProduct):
     LAYER = ComputedNodeLayer.METRIC
     DEPENDS_ON_RELS = (...)
     # implement _compute(scope, identity, request)

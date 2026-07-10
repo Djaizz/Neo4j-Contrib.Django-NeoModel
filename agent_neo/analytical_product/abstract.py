@@ -1,9 +1,9 @@
 """Computed graph node engine: abstract NeoModel bases + the canonical ``.get(request)`` path.
 
-Every computed family inherits :class:`AbstractComputedGraphNode`, wires ``computes_design``
+Every computed family inherits :class:`AbstractAnalyticalComputedProduct`, wires ``computes_design``
 (layer via the design node), implements ``_compute``, and shares one ensure/lineage/freshness
-behavior plus a unified instance spine. Design-node families inherit :class:`AbstractDesignNode`,
-declare ``LAYER``, and carry design-graph ``DEPENDS_ON_DESIGN_RELS`` registries plus shared
+behavior plus a unified instance spine. Design-node families inherit :class:`AbstractAnalyticalConcept`,
+declare ``LAYER``, and carry design-graph ``DEPENDS_ON_CONCEPT_RELS`` registries plus shared
 lifecycle fields. Identity uses ``cls.__name__`` as ``computed_node_class_name``.
 
 Ensure algorithm::
@@ -61,8 +61,8 @@ if TYPE_CHECKING:
 
 
 __all__: tuple[LiteralString, ...] = (
-    'AbstractDesignNode',
-    'AbstractComputedGraphNode',
+    'AbstractAnalyticalConcept',
+    'AbstractAnalyticalComputedProduct',
     'ComputedNodeResult',
 )
 
@@ -103,11 +103,11 @@ class ComputedNodeResult:
 
 
 # ============================================================================
-# Abstract design-node base (design-graph DEPENDS_ON_DESIGN registry + lifecycle)
+# Abstract design-node base (design-graph DEPENDS_ON_CONCEPT registry + lifecycle)
 # ============================================================================
 
-class AbstractDesignNode(DjangoNeoModelWithCreatedAndUpdatedProps):
-    """Abstract base for design nodes: shared lifecycle fields + ``DEPENDS_ON_DESIGN_RELS``.
+class AbstractAnalyticalConcept(DjangoNeoModelWithCreatedAndUpdatedProps):
+    """Abstract base for design nodes: shared lifecycle fields + ``DEPENDS_ON_CONCEPT_RELS``.
 
     Design-node subclasses still declare explicit NeoModel ``RelationshipTo`` managers (one per
     upstream design-node type) and family-specific fields (``concept_key``, ``time_granularity``,
@@ -119,7 +119,7 @@ class AbstractDesignNode(DjangoNeoModelWithCreatedAndUpdatedProps):
 
     LAYER: ClassVar[ComputedNodeLayer]
 
-    DEPENDS_ON_DESIGN_RELS: ClassVar[tuple[DependencySlot, ...]] = ()
+    DEPENDS_ON_CONCEPT_RELS: ClassVar[tuple[DependencySlot, ...]] = ()
 
     lifecycle_status: Property = StringProperty(
         index=True,
@@ -144,7 +144,7 @@ class AbstractDesignNode(DjangoNeoModelWithCreatedAndUpdatedProps):
 # Abstract computed graph node base (ensure path + unified spine)
 # ============================================================================
 
-class AbstractComputedGraphNode(DjangoNeoModelWithCreatedAndUpdatedProps):
+class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps):
     """Abstract base for every computed graph node NeoModel: spine + unified ensure path.
 
     A concrete product class must:
@@ -195,7 +195,7 @@ class AbstractComputedGraphNode(DjangoNeoModelWithCreatedAndUpdatedProps):
     # ------------------------------------------------------------------
 
     @classmethod
-    def concept_class(cls) -> type[AbstractDesignNode]:
+    def concept_class(cls) -> type[AbstractAnalyticalConcept]:
         """Design-node class for this computed family (from ``computes_design`` relationship)."""
         return get_computes_design_class(cls)
 

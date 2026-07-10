@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import LiteralString
 
-from agent_neo.analytical_product.abstract import AbstractComputedGraphNode, AbstractDesignNode, ComputedNodeResult
+from agent_neo.analytical_product.abstract import AbstractAnalyticalComputedProduct, AbstractAnalyticalConcept, ComputedNodeResult
 from agent_neo.analytical_product.enum import ComputedNodeLayer, GraphEdgeKind, NodeLifecycleStatus
 from agent_neo.analytical_product.identity import ComputedSlotIdentity, build_slot_key
 from agent_neo.analytical_product.registry import (
@@ -17,8 +17,8 @@ from agent_neo.analytical_product.request import ComputeRequest
 
 
 __all__: tuple[LiteralString, ...] = (
-    "AbstractComputedGraphNode",
-    "AbstractDesignNode",
+    "AbstractAnalyticalComputedProduct",
+    "AbstractAnalyticalConcept",
     "ComputeRequest",
     "ComputedNodeLayer",
     "ComputedNodeResult",

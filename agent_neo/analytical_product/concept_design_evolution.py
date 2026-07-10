@@ -5,7 +5,7 @@ prior to ``retired`` (no ``SUPERSEDES`` edge). That ``.save()`` fires signal han
 which mark every instance that ``computes_design`` the retired design node as ``needs_redo``
 — design change converges like data change, without per-family invalidation.
 
-Note: design-graph ``DEPENDS_ON_DESIGN`` is wired here, but instance cascade does not yet
+Note: design-graph ``DEPENDS_ON_CONCEPT`` is wired here, but instance cascade does not yet
 walk that edge. Retirement of a producing design node still fans out via ``computes_design``.
 """
 
@@ -42,7 +42,7 @@ def promote_concept(
     ``current`` is an unsaved (or freshly created) design node for the same logical family;
     it is saved as official, then :func:`retire_concept` retires ``previous`` so the change
     cascades. When ``depends_on_concepts`` is provided, wires
-    ``(current)-[:DEPENDS_ON_DESIGN]->(dependency)`` edges on the design graph.
+    ``(current)-[:DEPENDS_ON_CONCEPT]->(dependency)`` edges on the design graph.
     Returns the now-official ``current`` node.
     """
     current.lifecycle_status = NodeLifecycleStatus.OFFICIAL.value
@@ -56,10 +56,10 @@ def reconnect_concept_depends_on_concepts(
     concept: Any,
     dependency_concepts: list[Any],
 ) -> None:
-    """Replace-all ``DEPENDS_ON_DESIGN`` edges from ``concept`` to ``dependency_concepts``.
+    """Replace-all ``DEPENDS_ON_CONCEPT`` edges from ``concept`` to ``dependency_concepts``.
 
     Uses NeoModel ``element_id`` for idempotent connect/disconnect. When the design-node class
-    declares ``DEPENDS_ON_DESIGN_RELS``, the first slot's manager name is used; otherwise
+    declares ``DEPENDS_ON_CONCEPT_RELS``, the first slot's manager name is used; otherwise
     ``depends_on_concept`` or raw Cypher is used.
     """
     from .dependency_registry import get_design_depends_on_design_slots
@@ -95,7 +95,7 @@ def reconnect_concept_depends_on_concepts(
         for dependency_concept in dependency_concepts
         if (element_id := getattr(dependency_concept, 'element_id', None))
     ]
-    rel_type = GraphEdgeKind.DEPENDS_ON_DESIGN.value
+    rel_type = GraphEdgeKind.DEPENDS_ON_CONCEPT.value
 
     def _run_disconnect() -> None:
         db.cypher_query(
@@ -111,7 +111,7 @@ def reconnect_concept_depends_on_concepts(
 
     retry_neo4j_cluster_operation(
         _run_disconnect,
-        description='design node DEPENDS_ON_DESIGN disconnect stale',
+        description='design node DEPENDS_ON_CONCEPT disconnect stale',
         reconnect=reconnect_neo4j_driver,
     )
 
@@ -129,7 +129,7 @@ def reconnect_concept_depends_on_concepts(
 
         retry_neo4j_cluster_operation(
             _run_connect,
-            description='design node DEPENDS_ON_DESIGN connect',
+            description='design node DEPENDS_ON_CONCEPT connect',
             reconnect=reconnect_neo4j_driver,
         )
 
