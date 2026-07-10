@@ -33,10 +33,10 @@ class PeriodSpineMixin:
         db_property='facility_name',
         max_length=PERIOD_SPINE_MAX_STRING_LENGTH,
     )
-    time_granularity: Property = StringProperty(
+    temporal_granularity: Property = StringProperty(
         index=True,
         required=True,
-        db_property='time_granularity',
+        db_property='temporal_granularity',
         max_length=PERIOD_SPINE_MAX_STRING_LENGTH,
     )
     local_period_start: Property = StringProperty(

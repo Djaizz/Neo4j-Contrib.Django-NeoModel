@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 
 
 __all__: tuple[LiteralString, ...] = (
-    'TimeGranularity',
-    'VALID_TIME_GRANULARITIES',
+    'TemporalGranularity',
+    'VALID_TEMPORAL_GRANULARITIES',
     'TELEMETRY_LAG_MATURITY_MINUTES',
     'epoch_seconds',
     'coerce_to_date',
@@ -40,7 +40,7 @@ __all__: tuple[LiteralString, ...] = (
     'resolve_hourly_get_datetime_range',
     'resolve_monthly_get_month_range',
     'resolve_populate_date_range',
-    'resolve_window_for_time_granularity',
+    'resolve_window_for_temporal_granularity',
     'shift_months',
     'start_of_local_day',
     'start_of_next_local_day',
@@ -53,7 +53,7 @@ __all__: tuple[LiteralString, ...] = (
 TELEMETRY_LAG_MATURITY_MINUTES: int = 30
 
 
-class TimeGranularity(StrEnum):
+class TemporalGranularity(StrEnum):
     """Canonical time granularities for period windows and computed graph nodes."""
 
     HOURLY = 'hourly'
@@ -62,8 +62,8 @@ class TimeGranularity(StrEnum):
     MONTHLY = 'monthly'
 
 
-VALID_TIME_GRANULARITIES: Final[frozenset[str]] = frozenset(
-    time_granularity.value for time_granularity in TimeGranularity
+VALID_TEMPORAL_GRANULARITIES: Final[frozenset[str]] = frozenset(
+    temporal_granularity.value for temporal_granularity in TemporalGranularity
 )
 
 
@@ -295,24 +295,24 @@ def iso_week_start_local_midnight(local_datetime: datetime) -> datetime:
     return midnight - timedelta(days=midnight.weekday())
 
 
-def period_anchor(*, time_granularity: str, local_period_start: datetime) -> str:
-    """Canonical, collision-free string anchoring a period at a given time_granularity.
+def period_anchor(*, temporal_granularity: str, local_period_start: datetime) -> str:
+    """Canonical, collision-free string anchoring a period at a given temporal_granularity.
 
     The anchor is derived **only** from the aligned period start, so two requests that resolve
     to the same period produce the same key regardless of how their bounds were expressed
     (``concretized/IDENTITY-CACHE-KEY.md`` — period-bound canonicalization).
     """
-    if time_granularity == TimeGranularity.HOURLY:
+    if temporal_granularity == TemporalGranularity.HOURLY:
         return local_period_start.strftime('%Y-%m-%dT%H:00')
-    if time_granularity == TimeGranularity.DAILY:
+    if temporal_granularity == TemporalGranularity.DAILY:
         return local_period_start.strftime('%Y-%m-%d')
-    if time_granularity == TimeGranularity.WEEKLY:
+    if temporal_granularity == TemporalGranularity.WEEKLY:
         # ISO year + ISO week number; unambiguous across year boundaries.
         return local_period_start.strftime('%G-W%V')
-    if time_granularity == TimeGranularity.MONTHLY:
+    if temporal_granularity == TemporalGranularity.MONTHLY:
         return local_period_start.strftime('%Y-%m')
     raise ValueError(
-        f'time_granularity must be one of {[member.value for member in TimeGranularity]}; got {time_granularity!r}',
+        f'temporal_granularity must be one of {[member.value for member in TemporalGranularity]}; got {temporal_granularity!r}',
     )
 
 
@@ -320,23 +320,23 @@ def period_windows_for_range(
     *,
     from_datetime: datetime,
     to_datetime: datetime,
-    time_granularity: str,
+    temporal_granularity: str,
 ) -> list[tuple[datetime, datetime]]:
     """Aligned hourly / daily / weekly / monthly ``[start, end)`` windows covering ``[from, to)``."""
-    if time_granularity == TimeGranularity.HOURLY:
+    if temporal_granularity == TemporalGranularity.HOURLY:
         period_start = from_datetime.replace(minute=0, second=0, microsecond=0)
         period_delta: timedelta | None = timedelta(hours=1)
-    elif time_granularity == TimeGranularity.DAILY:
+    elif temporal_granularity == TemporalGranularity.DAILY:
         period_start = from_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
         period_delta = timedelta(days=1)
-    elif time_granularity == TimeGranularity.WEEKLY:
+    elif temporal_granularity == TemporalGranularity.WEEKLY:
         period_start = iso_week_start_local_midnight(from_datetime)
         period_delta = timedelta(weeks=1)
-    elif time_granularity == TimeGranularity.MONTHLY:
+    elif temporal_granularity == TemporalGranularity.MONTHLY:
         period_start = from_datetime.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         period_delta = None
     else:
-        raise ValueError(f"unsupported time_granularity {time_granularity!r}")
+        raise ValueError(f"unsupported temporal_granularity {temporal_granularity!r}")
 
     period_windows: list[tuple[datetime, datetime]] = []
     while period_start < to_datetime:
@@ -359,38 +359,38 @@ def _period_maturity_deadline(*, exclusive_period_end: datetime, maturity_minute
 def _step_exclusive_period_end_back(
     *,
     exclusive_period_end: datetime,
-    time_granularity: str,
+    temporal_granularity: str,
 ) -> datetime:
-    if time_granularity == TimeGranularity.HOURLY:
+    if temporal_granularity == TemporalGranularity.HOURLY:
         return exclusive_period_end - timedelta(hours=1)
-    if time_granularity == TimeGranularity.DAILY:
+    if temporal_granularity == TemporalGranularity.DAILY:
         return exclusive_period_end - timedelta(days=1)
-    if time_granularity == TimeGranularity.WEEKLY:
+    if temporal_granularity == TemporalGranularity.WEEKLY:
         return exclusive_period_end - timedelta(weeks=1)
-    if time_granularity == TimeGranularity.MONTHLY:
+    if temporal_granularity == TemporalGranularity.MONTHLY:
         month_start = exclusive_period_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         if month_start.month == 1:
             return month_start.replace(year=month_start.year - 1, month=12)
         return month_start.replace(month=month_start.month - 1)
     raise ValueError(
-        f'time_granularity must be one of {[g.value for g in TimeGranularity]}; got {time_granularity!r}',
+        f'temporal_granularity must be one of {[g.value for g in TemporalGranularity]}; got {temporal_granularity!r}',
     )
 
 
-def _initial_exclusive_period_end(*, local_now: datetime, time_granularity: str) -> datetime:
-    if time_granularity == TimeGranularity.HOURLY:
+def _initial_exclusive_period_end(*, local_now: datetime, temporal_granularity: str) -> datetime:
+    if temporal_granularity == TemporalGranularity.HOURLY:
         return local_now.replace(minute=0, second=0, microsecond=0)
-    if time_granularity == TimeGranularity.DAILY:
+    if temporal_granularity == TemporalGranularity.DAILY:
         midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         return midnight + timedelta(days=1)
-    if time_granularity == TimeGranularity.WEEKLY:
+    if temporal_granularity == TemporalGranularity.WEEKLY:
         week_start = iso_week_start_local_midnight(local_now)
         return week_start + timedelta(weeks=1)
-    if time_granularity == TimeGranularity.MONTHLY:
+    if temporal_granularity == TemporalGranularity.MONTHLY:
         month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         return next_month_start(month_start)
     raise ValueError(
-        f'time_granularity must be one of {[g.value for g in TimeGranularity]}; got {time_granularity!r}',
+        f'temporal_granularity must be one of {[g.value for g in TemporalGranularity]}; got {temporal_granularity!r}',
     )
 
 
@@ -401,7 +401,7 @@ def _initial_exclusive_period_end(*, local_now: datetime, time_granularity: str)
 
 def latest_eligible_exclusive_period_end(
     *,
-    time_granularity: str,
+    temporal_granularity: str,
     local_tz: tzinfo,
     now: datetime | None = None,
     maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
@@ -410,7 +410,7 @@ def latest_eligible_exclusive_period_end(
     local_now = _facility_local_now(local_tz=local_tz, now=now)
     candidate_exclusive_end = _initial_exclusive_period_end(
         local_now=local_now,
-        time_granularity=time_granularity,
+        temporal_granularity=temporal_granularity,
     )
     while local_now < _period_maturity_deadline(
         exclusive_period_end=candidate_exclusive_end,
@@ -418,7 +418,7 @@ def latest_eligible_exclusive_period_end(
     ):
         candidate_exclusive_end = _step_exclusive_period_end_back(
             exclusive_period_end=candidate_exclusive_end,
-            time_granularity=time_granularity,
+            temporal_granularity=temporal_granularity,
         )
     return candidate_exclusive_end
 
@@ -431,7 +431,7 @@ def latest_eligible_inclusive_daily_date(
 ) -> date:
     """Latest facility-local calendar day eligible for daily ensure-on-read ``.get()``."""
     local_to_exclusive = latest_eligible_exclusive_period_end(
-        time_granularity=TimeGranularity.DAILY,
+        temporal_granularity=TemporalGranularity.DAILY,
         local_tz=local_tz,
         now=now,
         maturity_minutes=maturity_minutes,
@@ -447,7 +447,7 @@ def latest_eligible_inclusive_month_string(
 ) -> str:
     """Latest ``YYYY-MM`` month eligible for monthly ensure-on-read ``.get()``."""
     local_to_exclusive = latest_eligible_exclusive_period_end(
-        time_granularity=TimeGranularity.MONTHLY,
+        temporal_granularity=TemporalGranularity.MONTHLY,
         local_tz=local_tz,
         now=now,
         maturity_minutes=maturity_minutes,
@@ -470,7 +470,7 @@ def resolve_hourly_get_datetime_range(
 ) -> tuple[datetime, datetime]:
     """Resolve facility-local ``[from, to)`` for hourly ensure-on-read ``.get()``."""
     eligible_to_exclusive = latest_eligible_exclusive_period_end(
-        time_granularity=TimeGranularity.HOURLY,
+        temporal_granularity=TemporalGranularity.HOURLY,
         local_tz=local_tz,
         now=now,
         maturity_minutes=maturity_minutes,
@@ -563,21 +563,21 @@ def resolve_monthly_get_month_range(
     return resolved_from_month, resolved_to_month
 
 
-def resolve_window_for_time_granularity(
+def resolve_window_for_temporal_granularity(
     from_bound: datetime | str | None,
     to_bound: datetime | str | None,
     *,
-    time_granularity: str,
+    temporal_granularity: str,
     local_tz: tzinfo,
     now: datetime | None = None,
     maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
 ) -> tuple[datetime, datetime]:
-    """Resolve facility-local ``[from, to)`` for any time_granularity, clamping ``to`` to latest mature.
+    """Resolve facility-local ``[from, to)`` for any temporal_granularity, clamping ``to`` to latest mature.
 
     Granularity-agnostic generalization of compat electricity get-range helpers: the maturity
     clamp lives here and applies identically to every product family.
     """
-    if time_granularity == TimeGranularity.MONTHLY:
+    if temporal_granularity == TemporalGranularity.MONTHLY:
         from_month = None if from_bound is None else _month_string_from_bound(from_bound)
         to_month = None if to_bound is None else _month_string_from_bound(to_bound)
         resolved_from_month, resolved_to_month = resolve_monthly_get_month_range(
@@ -598,12 +598,12 @@ def resolve_window_for_time_granularity(
     parsed_from = None if from_bound is None else _parse_bound_datetime(from_bound, local_tz=local_tz)
     parsed_to = None if to_bound is None else _parse_bound_datetime(to_bound, local_tz=local_tz)
 
-    if time_granularity == TimeGranularity.HOURLY:
+    if temporal_granularity == TemporalGranularity.HOURLY:
         return resolve_hourly_get_datetime_range(
             parsed_from, parsed_to, local_tz=local_tz, now=now, maturity_minutes=maturity_minutes,
         )
 
-    if time_granularity == TimeGranularity.DAILY:
+    if temporal_granularity == TemporalGranularity.DAILY:
         from_date = None if parsed_from is None else parsed_from.date()
         to_date = None if parsed_to is None else parsed_to.date()
         resolved_from_date, resolved_to_date = resolve_daily_get_date_range(
@@ -613,10 +613,10 @@ def resolve_window_for_time_granularity(
         local_end = datetime.combine(resolved_to_date + timedelta(days=1), datetime.min.time(), tzinfo=local_tz)
         return local_start, local_end
 
-    if time_granularity == TimeGranularity.WEEKLY:
+    if temporal_granularity == TemporalGranularity.WEEKLY:
         if parsed_to is None:
             local_to_exclusive = latest_eligible_exclusive_period_end(
-                time_granularity=TimeGranularity.WEEKLY, local_tz=local_tz, now=now, maturity_minutes=maturity_minutes,
+                temporal_granularity=TemporalGranularity.WEEKLY, local_tz=local_tz, now=now, maturity_minutes=maturity_minutes,
             )
         else:
             local_to_exclusive = iso_week_start_local_midnight(parsed_to) + timedelta(weeks=1)
@@ -629,13 +629,13 @@ def resolve_window_for_time_granularity(
             raise ValueError(f'from {local_from!r} must be strictly before to {local_to_exclusive!r}')
         return local_from, local_to_exclusive
 
-    raise ValueError(f"unsupported time_granularity {time_granularity!r}")
+    raise ValueError(f"unsupported temporal_granularity {temporal_granularity!r}")
 
 
 def is_period_mature_for_production(
     *,
     local_period_end: datetime,
-    time_granularity: str,
+    temporal_granularity: str,
     local_tz: tzinfo,
     now: datetime | None = None,
     maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
@@ -643,11 +643,11 @@ def is_period_mature_for_production(
     """Populate-side maturity gate: may this finished period be persisted as settled?
 
     A period is mature for production iff its exclusive end is at or before the latest eligible
-    (mature) period end for its time_granularity.
+    (mature) period end for its temporal_granularity.
     """
     require_timezone_aware(local_period_end, name='local_period_end')
     eligible_to_exclusive = latest_eligible_exclusive_period_end(
-        time_granularity=time_granularity, local_tz=local_tz, now=now, maturity_minutes=maturity_minutes,
+        temporal_granularity=temporal_granularity, local_tz=local_tz, now=now, maturity_minutes=maturity_minutes,
     )
     return local_period_end.astimezone(local_tz) <= eligible_to_exclusive
 

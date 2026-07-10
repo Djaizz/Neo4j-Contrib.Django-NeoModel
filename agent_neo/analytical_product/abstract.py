@@ -110,7 +110,7 @@ class AbstractAnalyticalConcept(DjangoNeoModelWithCreatedAndUpdatedProps):
     """Abstract base for design nodes: shared lifecycle fields + ``DEPENDS_ON_CONCEPT_RELS``.
 
     Design-node subclasses still declare explicit NeoModel ``RelationshipTo`` managers (one per
-    upstream design-node type) and family-specific fields (``concept_key``, ``time_granularity``,
+    upstream design-node type) and family-specific fields (``concept_key``, ``temporal_granularity``,
     etc.). The registry lists every manager so ``promote_concept`` and startup validation can
     discover them without ad-hoc Cypher.
     """
@@ -171,13 +171,13 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         unique_index=True,
         max_length=256,
         label='Logical slot id',
-        help_text='Deterministic over (facility, subject, time_granularity, window) — not over the design.',
+        help_text='Deterministic over (facility, subject, temporal_granularity, window) — not over the design.',
     )
     facility_name: Property = StringProperty(required=True, index=True)
     subject_kind: Property = StringProperty(required=True, index=True)
     subject_key: Property = StringProperty(required=True, index=True)
     product_kind: Property = StringProperty(required=True, index=True)
-    time_granularity: Property = StringProperty(required=True, index=True)
+    temporal_granularity: Property = StringProperty(required=True, index=True)
     local_period_start: Property = DateTimeNeo4jFormatProperty(required=True, index=True)
     local_period_end: Property = DateTimeNeo4jFormatProperty(required=True)
 
@@ -277,7 +277,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
             'subject_kind': getattr(instance, 'subject_kind', None),
             'subject_key': getattr(instance, 'subject_key', None),
             'product_kind': getattr(instance, 'product_kind', None),
-            'time_granularity': getattr(instance, 'time_granularity', None),
+            'temporal_granularity': getattr(instance, 'temporal_granularity', None),
             'local_period_start': getattr(instance, 'local_period_start', None),
             'local_period_end': getattr(instance, 'local_period_end', None),
             'lifecycle_status': getattr(instance, 'lifecycle_status', None),

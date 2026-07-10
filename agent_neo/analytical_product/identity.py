@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import LiteralString
 
-from agent_neo.util.datetime import TimeGranularity, period_anchor
+from agent_neo.util.datetime import TemporalGranularity, period_anchor
 
 
 __all__: tuple[LiteralString, ...] = (
@@ -30,7 +30,7 @@ def build_slot_key(
     scope_name: str,
     subject_kind: str,
     subject_key: str,
-    time_granularity: TimeGranularity | str,
+    temporal_granularity: TemporalGranularity | str,
     local_period_start: datetime,
     day_classif: str = 'all',
     hour_classif: str = 'all',
@@ -39,14 +39,14 @@ def build_slot_key(
 
     Format (de-versioned)::
 
-        {computed_node_class_name}|{scope_name}|{subject_kind}={subject_key}|{time_granularity}|{period_anchor}
+        {computed_node_class_name}|{scope_name}|{subject_kind}={subject_key}|{temporal_granularity}|{period_anchor}
 
     When either classification is non-``all`` the key is suffixed with ``|d={day}|h={hour}`` so
     sliced rollups occupy distinct slots; the common unsliced case omits the suffix.
     ``computed_node_class_name`` is the concrete class name (``cls.__name__``).
     """
-    anchor = period_anchor(time_granularity=time_granularity, local_period_start=local_period_start)
-    base = f'{computed_node_class_name}|{scope_name}|{subject_kind}={subject_key}|{time_granularity}|{anchor}'
+    anchor = period_anchor(temporal_granularity=temporal_granularity, local_period_start=local_period_start)
+    base = f'{computed_node_class_name}|{scope_name}|{subject_kind}={subject_key}|{temporal_granularity}|{anchor}'
     if day_classif == 'all' and hour_classif == 'all':
         return base
     return f'{base}|d={day_classif}|h={hour_classif}'
@@ -64,7 +64,7 @@ class ComputedSlotIdentity:
     scope_name: str
     subject_kind: str
     subject_key: str
-    time_granularity: TimeGranularity | str
+    temporal_granularity: TemporalGranularity | str
     local_period_start: datetime
     local_period_end: datetime
     day_classif: str = 'all'
@@ -78,7 +78,7 @@ class ComputedSlotIdentity:
             scope_name=self.scope_name,
             subject_kind=self.subject_kind,
             subject_key=self.subject_key,
-            time_granularity=self.time_granularity,
+            temporal_granularity=self.temporal_granularity,
             local_period_start=self.local_period_start,
             day_classif=self.day_classif,
             hour_classif=self.hour_classif,

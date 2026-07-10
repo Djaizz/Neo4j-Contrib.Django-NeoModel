@@ -8,7 +8,7 @@ from typing import Any, LiteralString
 
 from agent_neo.analytical_product.identity import ComputedSlotIdentity
 from agent_neo.analytical_product.request import ComputeRequest
-from agent_neo.util.datetime import TimeGranularity, period_windows_for_range
+from agent_neo.util.datetime import TemporalGranularity, period_windows_for_range
 
 
 __all__: tuple[LiteralString, ...] = (
@@ -26,7 +26,7 @@ def prefetch_daily_instances_by_cache_key(
     daily_request = ComputeRequest(
         subject_kind=request.subject_kind,
         subject_key=request.subject_key,
-        time_granularity=TimeGranularity.DAILY,
+        temporal_granularity=TemporalGranularity.DAILY,
         local_period_start=request.local_period_start,
         local_period_end=request.local_period_end,
         day_classif=request.day_classif,
@@ -49,7 +49,7 @@ def collect_daily_dep_instances_for_monthly_identity(
     daily_windows = period_windows_for_range(
         from_datetime=slot_identity.local_period_start,
         to_datetime=slot_identity.local_period_end,
-        time_granularity=TimeGranularity.DAILY,
+        temporal_granularity=TemporalGranularity.DAILY,
     )
     daily_dep_instances: list[Any] = []
     for window_start, window_end in daily_windows:
@@ -58,7 +58,7 @@ def collect_daily_dep_instances_for_monthly_identity(
             scope_name=slot_identity.scope_name,
             subject_kind=slot_identity.subject_kind,
             subject_key=slot_identity.subject_key,
-            time_granularity=TimeGranularity.DAILY,
+            temporal_granularity=TemporalGranularity.DAILY,
             local_period_start=window_start,
             local_period_end=window_end,
             day_classif=slot_identity.day_classif,

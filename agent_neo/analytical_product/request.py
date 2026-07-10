@@ -1,7 +1,7 @@
 """The canonical :class:`ComputeRequest` for the unified ``.get(request)`` path.
 
 A ``ComputeRequest`` is the *only* way to ask for a computed graph node. It carries identity
-coordinates (scope, subject, period bounds, time_granularity, day/hour classif, design node
+coordinates (scope, subject, period bounds, temporal_granularity, day/hour classif, design node
 selection) plus serving-side time-freshness (distinct from lineage ``needs_redo``). Given the
 scope timezone it resolves to a maturity-clamped sequence of :class:`ComputedSlotIdentity` slots.
 
@@ -21,10 +21,10 @@ from typing import LiteralString
 
 from agent_neo.util.datetime import (
     TELEMETRY_LAG_MATURITY_MINUTES,
-    TimeGranularity,
-    VALID_TIME_GRANULARITIES,
+    TemporalGranularity,
+    VALID_TEMPORAL_GRANULARITIES,
     period_windows_for_range,
-    resolve_window_for_time_granularity,
+    resolve_window_for_temporal_granularity,
 )
 
 from .freshness import FreshnessPolicy, DEFAULT_FRESHNESS_POLICY
@@ -42,7 +42,7 @@ class ComputeRequest:
     rather than passed by callers. ``subject_kind``/``subject_key`` name the topology subject
     (meter, floor, building, whole_site, zone, plant, asset, …). Period bounds are scope-local
     and may be open-ended; ``None`` bounds resolve to the latest mature period at
-    ``time_granularity``. ``concept_selection`` is ``'current'`` for normal reads — a sentinel
+    ``temporal_granularity``. ``concept_selection`` is ``'current'`` for normal reads — a sentinel
     meaning "whichever design node is currently in force, ``official`` or ``provisional``" — or
     a concrete ``concept_key`` to pin a historical (possibly ``retired``) computation for
     audit/replay.
@@ -50,7 +50,7 @@ class ComputeRequest:
 
     subject_kind: str
     subject_key: str
-    time_granularity: TimeGranularity | str = TimeGranularity.DAILY
+    temporal_granularity: TemporalGranularity | str = TemporalGranularity.DAILY
     local_period_start: datetime | str | None = None
     local_period_end: datetime | str | None = None
     day_classif: str = 'all'
@@ -59,9 +59,9 @@ class ComputeRequest:
     concept_selection: str = 'current'  # TODO: review necessity
 
     def __post_init__(self) -> None:
-        if self.time_granularity not in VALID_TIME_GRANULARITIES:
+        if self.temporal_granularity not in VALID_TEMPORAL_GRANULARITIES:
             raise ValueError(
-                f'time_granularity must be one of {sorted(VALID_TIME_GRANULARITIES)}; got {self.time_granularity!r}',
+                f'temporal_granularity must be one of {sorted(VALID_TEMPORAL_GRANULARITIES)}; got {self.temporal_granularity!r}',
             )
 
     def resolve_identities(
@@ -80,10 +80,10 @@ class ComputeRequest:
         clamp to the latest mature period; older explicit bounds pass through. One identity per
         aligned period in the resolved range.
         """
-        local_from, local_to_exclusive = resolve_window_for_time_granularity(
+        local_from, local_to_exclusive = resolve_window_for_temporal_granularity(
             self.local_period_start,
             self.local_period_end,
-            time_granularity=self.time_granularity,
+            temporal_granularity=self.temporal_granularity,
             local_tz=local_tz,
             now=now,
             maturity_minutes=maturity_minutes,
@@ -94,7 +94,7 @@ class ComputeRequest:
                 scope_name=scope_name,
                 subject_kind=self.subject_kind,
                 subject_key=self.subject_key,
-                time_granularity=self.time_granularity,
+                temporal_granularity=self.temporal_granularity,
                 local_period_start=window_start,
                 local_period_end=window_end,
                 day_classif=self.day_classif,
@@ -103,6 +103,6 @@ class ComputeRequest:
             for window_start, window_end in period_windows_for_range(
                 from_datetime=local_from,
                 to_datetime=local_to_exclusive,
-                time_granularity=self.time_granularity,
+                temporal_granularity=self.temporal_granularity,
             )
         ]

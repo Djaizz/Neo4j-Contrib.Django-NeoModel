@@ -107,16 +107,16 @@ def spine_window_where_clauses(
     *,
     node_alias: str = 'n',
     facility_name: str,
-    time_granularity: str | None = None,
+    temporal_granularity: str | None = None,
     local_period_start_gte: str | None = None,
     local_period_start_lt: str | None = None,
 ) -> tuple[list[str], dict[str, Any]]:
     """Build indexed ``WHERE`` fragments for period-spine range scans (populate, preload)."""
     where_clauses = [f'{node_alias}.facility_name = $facility_name']
     params: dict[str, Any] = {'facility_name': facility_name}
-    if time_granularity is not None:
-        where_clauses.append(f'{node_alias}.time_granularity = $time_granularity')
-        params['time_granularity'] = time_granularity
+    if temporal_granularity is not None:
+        where_clauses.append(f'{node_alias}.temporal_granularity = $temporal_granularity')
+        params['temporal_granularity'] = temporal_granularity
     if local_period_start_gte is not None:
         where_clauses.append(f'{node_alias}.local_period_start >= $local_period_start_gte')
         params['local_period_start_gte'] = local_period_start_gte

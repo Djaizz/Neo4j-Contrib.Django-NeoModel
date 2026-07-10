@@ -172,7 +172,7 @@ def _upsert_row(
         'subject_kind': identity.subject_kind,
         'subject_key': identity.subject_key,
         'product_kind': _product_kind(product_cls, compute_result),
-        'time_granularity': identity.time_granularity,
+        'temporal_granularity': identity.temporal_granularity,
         'local_period_start': coerce_to_utc_for_neo4j_datetime(
             identity.local_period_start,
             local_tz,

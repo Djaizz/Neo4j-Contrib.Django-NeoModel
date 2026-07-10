@@ -13,7 +13,7 @@ from neomodel.sync_.database import db
 
 from agent_neo.analytical_product.registry import iter_registered_computed_node_classes
 from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
-from agent_neo.util.datetime import TimeGranularity, epoch_seconds
+from agent_neo.util.datetime import TemporalGranularity, epoch_seconds
 
 from .enum import GraphEdgeKind, NodeLifecycleStatus
 from .request import ComputeRequest
@@ -286,7 +286,7 @@ class _ImpactMeta:
 
     element_id: str
     labels: tuple[str, ...]
-    time_granularity: TimeGranularity | str | None
+    temporal_granularity: TemporalGranularity | str | None
     subject_kind: str | None
     subject_key: str | None
     local_period_start: datetime | None
@@ -295,12 +295,12 @@ class _ImpactMeta:
 
 @dataclass(slots=True)
 class _RecomputeGroup:
-    """A coalesced range recompute for one ``(class, subject, time_granularity)`` cohort."""
+    """A coalesced range recompute for one ``(class, subject, temporal_granularity)`` cohort."""
 
     product_cls: type
     subject_kind: str
     subject_key: str
-    time_granularity: TimeGranularity | str
+    temporal_granularity: TemporalGranularity | str
     local_period_start: datetime
     local_period_end: datetime
     member_count: int = 1
@@ -314,7 +314,7 @@ def recompute_needs_redo(
 
     Removes the per-impact N+1: one batched Cypher fetches the request-shaping
     metadata for every impacted node, then impacts are coalesced into one range
-    ``ComputeRequest`` per ``(product class, subject_kind, subject_key, time_granularity)``
+    ``ComputeRequest`` per ``(product class, subject_kind, subject_key, temporal_granularity)``
     cohort (spanning ``[min(local_period_start), max(local_period_end)]``).
     Groups recompute in layer-rank order (fact -> metric -> interpretation -> view)
     via the product class's ``.get`` — the same ensure path used on read, so there
@@ -359,7 +359,7 @@ def recompute_needs_redo(
             request = ComputeRequest(
                 subject_kind=group.subject_kind,
                 subject_key=group.subject_key,
-                time_granularity=group.time_granularity,
+                temporal_granularity=group.temporal_granularity,
                 local_period_start=group.local_period_start,
                 local_period_end=group.local_period_end,
             )
@@ -389,7 +389,7 @@ def _fetch_impact_metadata(element_ids: list[str]) -> dict[str, _ImpactMeta]:
     query = (
         'MATCH (n) WHERE elementId(n) IN $element_ids '
         'RETURN elementId(n) AS element_id, labels(n) AS labels, '
-        'n.time_granularity AS time_granularity, n.subject_kind AS subject_kind, '
+        'n.temporal_granularity AS temporal_granularity, n.subject_kind AS subject_kind, '
         'n.subject_key AS subject_key, '
         'n.local_period_start AS local_period_start, '
         'n.local_period_end AS local_period_end'
@@ -409,7 +409,7 @@ def _fetch_impact_metadata(element_ids: list[str]) -> dict[str, _ImpactMeta]:
         metadata[row[0]] = _ImpactMeta(
             element_id=row[0],
             labels=tuple(row[1] or ()),
-            time_granularity=row[2],
+            temporal_granularity=row[2],
             subject_kind=row[3],
             subject_key=row[4],
             local_period_start=_to_native_datetime(row[5]),
@@ -427,25 +427,25 @@ def _to_native_datetime(value: Any) -> datetime | None:
 
 def _group_for_meta(product_cls: type, meta: _ImpactMeta) -> _RecomputeGroup | None:
     """Build a single-member recompute group from one node's metadata (or ``None`` if unshapeable)."""
-    if not (meta.time_granularity and meta.subject_kind and meta.subject_key and meta.local_period_start):
+    if not (meta.temporal_granularity and meta.subject_kind and meta.subject_key and meta.local_period_start):
         return None
     # Hourly resolvers treat the upper bound exclusively; daily/weekly/monthly
     # treat it inclusively at the lower-of-window. Mirror ``_span_upper_bound``.
-    local_period_end = meta.local_period_end if meta.time_granularity == TimeGranularity.HOURLY else meta.local_period_start
+    local_period_end = meta.local_period_end if meta.temporal_granularity == TemporalGranularity.HOURLY else meta.local_period_start
     if local_period_end is None:
         local_period_end = meta.local_period_start
     return _RecomputeGroup(
         product_cls=product_cls,
         subject_kind=meta.subject_kind,
         subject_key=meta.subject_key,
-        time_granularity=meta.time_granularity,
+        temporal_granularity=meta.temporal_granularity,
         local_period_start=meta.local_period_start,
         local_period_end=local_period_end,
     )
 
 
 def _group_key(group: _RecomputeGroup) -> tuple[str, str, str, str]:
-    return (group.product_cls.__name__, group.subject_kind, group.subject_key, group.time_granularity)
+    return (group.product_cls.__name__, group.subject_kind, group.subject_key, group.temporal_granularity)
 
 
 # ============================================================================

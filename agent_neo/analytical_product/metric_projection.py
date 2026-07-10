@@ -43,7 +43,7 @@ def metric_identity_from_view_identity(
         facility_name=view_identity.facility_name,
         subject_kind=view_identity.subject_kind,
         subject_key=view_identity.subject_key,
-        time_granularity=view_identity.time_granularity,
+        temporal_granularity=view_identity.temporal_granularity,
         local_period_start=view_identity.local_period_start,
         local_period_end=view_identity.local_period_end,
         day_classif=view_identity.day_classif,

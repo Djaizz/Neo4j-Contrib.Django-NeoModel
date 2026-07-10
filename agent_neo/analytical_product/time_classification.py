@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Final, LiteralString
 
-from agent_neo.util.datetime import TimeGranularity
+from agent_neo.util.datetime import TemporalGranularity
 
 
 __all__: tuple[LiteralString, ...] = (
@@ -84,13 +84,13 @@ def validate_day_slice(day_slice: str) -> str:
     return day_slice
 
 
-def default_hour_slice_for_granularity(time_granularity: str) -> str:
-    if time_granularity == TimeGranularity.HOURLY:
+def default_hour_slice_for_granularity(temporal_granularity: str) -> str:
+    if temporal_granularity == TemporalGranularity.HOURLY:
         return HOUR_SLICE_ALL
     return HOUR_SLICE_ALL
 
 
-def default_day_slice_for_granularity(time_granularity: str) -> str:
+def default_day_slice_for_granularity(temporal_granularity: str) -> str:
     return DAY_SLICE_ALL
 
 
