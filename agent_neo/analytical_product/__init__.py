@@ -7,22 +7,22 @@ from typing import LiteralString
 
 from agent_neo.analytical_product.abstract import AbstractAnalyticalComputedProduct, AbstractAnalyticalConcept, ComputedNodeResult
 from agent_neo.analytical_product.enum import ComputedNodeLayer, GraphEdgeKind, NodeLifecycleStatus
-from agent_neo.analytical_product.identity import ComputedSlotIdentity, build_slot_key
+from agent_neo.analytical_product.identity import AnalyticalProductIdentity, build_slot_key
 from agent_neo.analytical_product.registry import (
     register_computed_node_class,
     register_design_node_class,
     register_relationship_target_class,
 )
-from agent_neo.analytical_product.request import ComputeRequest
+from agent_neo.analytical_product.request import AnalyticalProductRequest
 
 
 __all__: tuple[LiteralString, ...] = (
     "AbstractAnalyticalComputedProduct",
     "AbstractAnalyticalConcept",
-    "ComputeRequest",
+    "AnalyticalProductRequest",
     "ComputedNodeLayer",
     "ComputedNodeResult",
-    "ComputedSlotIdentity",
+    "AnalyticalProductIdentity",
     "GraphEdgeKind",
     "NodeLifecycleStatus",
     "build_slot_key",

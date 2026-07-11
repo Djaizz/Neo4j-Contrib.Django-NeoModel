@@ -53,7 +53,7 @@ Define layered computed nodes with declarative dependency registries:
 from agent_neo.analytical_product import (
     AbstractAnalyticalComputedProduct,
     ComputedNodeLayer,
-    ComputeRequest,
+    AnalyticalProductRequest,
     register_computed_node_class,
 )
 
@@ -65,7 +65,7 @@ class RelatedItemMetricSet(AbstractAnalyticalComputedProduct):
 register_computed_node_class(RelatedItemMetricSet)
 ```
 
-Use `ComputeRequest` with `scope_name` (your tenant/scope identifier) rather than domain-specific names.
+Use `AnalyticalProductRequest` with `scope_name` (your tenant/scope identifier) rather than domain-specific names.
 
 ## Optional extras
 

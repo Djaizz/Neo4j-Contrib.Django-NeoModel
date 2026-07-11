@@ -6,12 +6,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from agent_neo.analytical_product.identity import ComputedSlotIdentity
+from agent_neo.analytical_product.identity import AnalyticalProductIdentity
 from agent_neo.analytical_product.monthly_rollup_deps import (
     collect_daily_dep_instances_for_monthly_identity,
     prefetch_daily_instances_by_cache_key,
 )
-from agent_neo.analytical_product.request import ComputeRequest
+from agent_neo.analytical_product.request import AnalyticalProductRequest
 from agent_neo.util.datetime import TimeGranularity
 
 
@@ -21,16 +21,16 @@ class _StubInstance:
 
 
 def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
-    received_requests: list[ComputeRequest] = []
+    received_requests: list[AnalyticalProductRequest] = []
 
-    def ensure_instances(compute_request: ComputeRequest) -> list[_StubInstance]:
+    def ensure_instances(compute_request: AnalyticalProductRequest) -> list[_StubInstance]:
         received_requests.append(compute_request)
         return [
             _StubInstance(cache_key='daily-a'),
             _StubInstance(cache_key='daily-b'),
         ]
 
-    parent_request = ComputeRequest(
+    parent_request = AnalyticalProductRequest(
         subject_kind='building',
         subject_key='9A',
         time_granularity=TimeGranularity.MONTHLY,
@@ -58,7 +58,7 @@ def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
 
 
 def test_collect_daily_dep_instances_for_monthly_identity_filters_missing() -> None:
-    monthly_identity = ComputedSlotIdentity(
+    monthly_identity = AnalyticalProductIdentity(
         computed_node_class_name='HVACEquipmentTemperatureComfort',
         scope_name='nvidia-voyager',
         subject_kind='hvac_equipment',
@@ -67,7 +67,7 @@ def test_collect_daily_dep_instances_for_monthly_identity_filters_missing() -> N
         local_period_start=datetime(2026, 5, 1),
         local_period_end=datetime(2026, 5, 4),
     )
-    may_first_identity = ComputedSlotIdentity(
+    may_first_identity = AnalyticalProductIdentity(
         computed_node_class_name=monthly_identity.computed_node_class_name,
         scope_name=monthly_identity.scope_name,
         subject_kind=monthly_identity.subject_kind,
@@ -76,7 +76,7 @@ def test_collect_daily_dep_instances_for_monthly_identity_filters_missing() -> N
         local_period_start=datetime(2026, 5, 1),
         local_period_end=datetime(2026, 5, 2),
     )
-    may_third_identity = ComputedSlotIdentity(
+    may_third_identity = AnalyticalProductIdentity(
         computed_node_class_name=monthly_identity.computed_node_class_name,
         scope_name=monthly_identity.scope_name,
         subject_kind=monthly_identity.subject_kind,

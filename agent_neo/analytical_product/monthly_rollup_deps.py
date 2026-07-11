@@ -6,8 +6,8 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Any, LiteralString
 
-from agent_neo.analytical_product.identity import ComputedSlotIdentity
-from agent_neo.analytical_product.request import ComputeRequest
+from agent_neo.analytical_product.identity import AnalyticalProductIdentity
+from agent_neo.analytical_product.request import AnalyticalProductRequest
 from agent_neo.util.datetime import TemporalGranularity, period_windows_for_range
 
 
@@ -19,11 +19,11 @@ __all__: tuple[LiteralString, ...] = (
 
 def prefetch_daily_instances_by_cache_key(
     *,
-    ensure_instances: Callable[[ComputeRequest], Iterable[Any]],
-    request: ComputeRequest,
+    ensure_instances: Callable[[AnalyticalProductRequest], Iterable[Any]],
+    request: AnalyticalProductRequest,
 ) -> dict[str, Any]:
     """Ensure daily computed-node instances for the same scope/range; index by ``cache_key``."""
-    daily_request = ComputeRequest(
+    daily_request = AnalyticalProductRequest(
         subject_kind=request.subject_kind,
         subject_key=request.subject_key,
         temporal_granularity=TemporalGranularity.DAILY,
@@ -42,7 +42,7 @@ def prefetch_daily_instances_by_cache_key(
 
 def collect_daily_dep_instances_for_monthly_identity(
     *,
-    slot_identity: ComputedSlotIdentity,
+    slot_identity: AnalyticalProductIdentity,
     daily_instances_by_cache_key: dict[str, Any],
 ) -> list[Any]:
     """Return persisted daily instances that roll up into one monthly slot identity."""
@@ -53,7 +53,7 @@ def collect_daily_dep_instances_for_monthly_identity(
     )
     daily_dep_instances: list[Any] = []
     for window_start, window_end in daily_windows:
-        daily_identity = ComputedSlotIdentity(
+        daily_identity = AnalyticalProductIdentity(
             computed_node_class_name=slot_identity.computed_node_class_name,
             scope_name=slot_identity.scope_name,
             subject_kind=slot_identity.subject_kind,

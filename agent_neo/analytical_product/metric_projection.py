@@ -11,7 +11,7 @@ from agent_neo.analytical_product.abstract import (
     ComputedNodeResult,
 )
 from agent_neo.analytical_product.enum import NodeLifecycleStatus
-from agent_neo.analytical_product.request import ComputeRequest
+from agent_neo.analytical_product.request import AnalyticalProductRequest
 from agent_neo.util.json_safe import json_safe_structure
 
 
@@ -66,7 +66,7 @@ def project_metric_instance_to_payload(
 def serve_multi_row_metric_projection(
     metric_set_class: type[AbstractAnalyticalComputedProduct],
     compute_scope: ComputeScope,
-    request: ComputeRequest,
+    request: AnalyticalProductRequest,
     *,
     serialize: Callable[[Any], dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -101,7 +101,7 @@ def ensure_official_concept(
 def serve_projected_payload_rows(
     view_set_class: type[AbstractAnalyticalComputedProduct],
     compute_scope: ComputeScope,
-    request: ComputeRequest,
+    request: AnalyticalProductRequest,
 ) -> list[dict[str, Any]]:
     """Serve persisted ``projected_payload_json`` from ViewSet instances."""
     view_instances = view_set_class.get(compute_scope, request)

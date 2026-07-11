@@ -27,7 +27,7 @@ from .enum import (
     NodeLifecycleStatus,
     GraphEdgeKind,
 )
-from .identity import ComputedSlotIdentity
+from .identity import AnalyticalProductIdentity
 
 if TYPE_CHECKING:
     from agent_neo.analytical_product.scope import ComputeScope
@@ -49,7 +49,7 @@ T = TypeVar('T')
 class BulkPersistItem:
     """One computed graph node instance to write in a bulk persistence pass."""
 
-    identity: ComputedSlotIdentity
+    identity: AnalyticalProductIdentity
     compute_result: ComputedNodeResult
     retiring: Any | None
 
@@ -159,7 +159,7 @@ def _product_kind(product_cls: type, compute_result: ComputedNodeResult) -> str:
 
 def _upsert_row(
     product_cls: type,
-    identity: ComputedSlotIdentity,
+    identity: AnalyticalProductIdentity,
     compute_result: ComputedNodeResult,
     *,
     local_tz: tzinfo,

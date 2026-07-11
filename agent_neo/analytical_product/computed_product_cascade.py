@@ -16,7 +16,7 @@ from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_opera
 from agent_neo.util.datetime import TemporalGranularity, epoch_seconds
 
 from .enum import GraphEdgeKind, NodeLifecycleStatus
-from .request import ComputeRequest
+from .request import AnalyticalProductRequest
 
 if TYPE_CHECKING:
     from agent_neo.analytical_product.scope import ComputeScope
@@ -279,7 +279,7 @@ def collect_needs_redo_impacts(*, facility_name: str | None = None) -> list[Casc
 
 @dataclass(frozen=True, slots=True)
 class _ImpactMeta:
-    """ComputeRequest-shaping metadata for one impacted node (batched, not per-node fetched).
+    """AnalyticalProductRequest-shaping metadata for one impacted node (batched, not per-node fetched).
 
     Keyed by Neo4j ``element_id`` (physical node), not ``cache_key`` (logical slot).
     """
@@ -314,7 +314,7 @@ def recompute_needs_redo(
 
     Removes the per-impact N+1: one batched Cypher fetches the request-shaping
     metadata for every impacted node, then impacts are coalesced into one range
-    ``ComputeRequest`` per ``(product class, subject_kind, subject_key, temporal_granularity)``
+    ``AnalyticalProductRequest`` per ``(product class, subject_kind, subject_key, temporal_granularity)``
     cohort (spanning ``[min(local_period_start), max(local_period_end)]``).
     Groups recompute in layer-rank order (fact -> metric -> interpretation -> view)
     via the product class's ``.get`` — the same ensure path used on read, so there
@@ -356,7 +356,7 @@ def recompute_needs_redo(
 
     with cascade_suppressed():
         for group in ordered_groups:
-            request = ComputeRequest(
+            request = AnalyticalProductRequest(
                 subject_kind=group.subject_kind,
                 subject_key=group.subject_key,
                 temporal_granularity=group.temporal_granularity,

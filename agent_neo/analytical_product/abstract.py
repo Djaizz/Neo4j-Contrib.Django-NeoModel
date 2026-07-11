@@ -51,8 +51,8 @@ from .enum import (
     NodeLifecycleStatus,
     GraphEdgeKind,
 )
-from .identity import ComputedSlotIdentity
-from .request import ComputeRequest
+from .identity import AnalyticalProductIdentity
+from .request import AnalyticalProductRequest
 
 if TYPE_CHECKING:
     from agent_neo.analytical_product.scope import ComputeScope
@@ -205,7 +205,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return cls.concept_class().LAYER
 
     @classmethod
-    def get(cls, scope: ComputeScope, request: ComputeRequest) -> list[Any]:
+    def get(cls, scope: ComputeScope, request: AnalyticalProductRequest) -> list[Any]:
         """Ensure-on-read every period instance the request resolves to; return the instances."""
         local_tz = _local_tz(scope)
         identities = request.resolve_identities(
@@ -218,7 +218,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 
         existing_by_cache_key = cls._prefetch_current_by_cache_keys(identity.cache_key for identity in identities)
         instances_by_cache_key: dict[str, Any] = {}
-        persist_items: list[tuple[ComputedSlotIdentity, ComputedNodeResult, Any | None]] = []
+        persist_items: list[tuple[AnalyticalProductIdentity, ComputedNodeResult, Any | None]] = []
         for identity in identities:
             existing = existing_by_cache_key.get(identity.cache_key)
             if (
@@ -237,7 +237,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return [instances_by_cache_key[i.cache_key] for i in identities if i.cache_key in instances_by_cache_key]
 
     @classmethod
-    def serve(cls, scope: ComputeScope, request: ComputeRequest) -> list[dict[str, Any]]:
+    def serve(cls, scope: ComputeScope, request: AnalyticalProductRequest) -> list[dict[str, Any]]:
         """Boundary-checked serving form (E2/E11): Views only."""
         if not cls.layer().is_served:
             raise TypeError(
@@ -247,7 +247,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return [cls.to_payload(instance) for instance in cls.get(scope, request)]
 
     @classmethod
-    def ensure_one(cls, scope: ComputeScope, identity: ComputedSlotIdentity, request: ComputeRequest) -> Any:
+    def ensure_one(cls, scope: ComputeScope, identity: AnalyticalProductIdentity, request: AnalyticalProductRequest) -> Any:
         """Fetch the valid current instance at ``identity`` or compute, persist, and retire the prior one."""
         existing = cls._probe_current(identity)
         if (
@@ -264,7 +264,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
     # ------------------------------------------------------------------
 
     @classmethod
-    def _compute(cls, scope: ComputeScope, identity: ComputedSlotIdentity, request: ComputeRequest) -> ComputedNodeResult:
+    def _compute(cls, scope: ComputeScope, identity: AnalyticalProductIdentity, request: AnalyticalProductRequest) -> ComputedNodeResult:
         """Produce the payload + lineage for one computed graph node instance. Override per family."""
         raise NotImplementedError(f'{cls.__name__} must implement _compute()')
 
@@ -288,7 +288,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
     # ------------------------------------------------------------------
 
     @classmethod
-    def _probe_current(cls, identity: ComputedSlotIdentity) -> Any:
+    def _probe_current(cls, identity: AnalyticalProductIdentity) -> Any:
         """Return the current (official or provisional) instance at this identity's cache_key, or None."""
         node = cls.nodes.get_or_none(cache_key=identity.cache_key)  # type: ignore[attr-defined]
         if node is None:
@@ -303,7 +303,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return prefetch_current_by_cache_keys(cls, cache_keys)
 
     @classmethod
-    def _is_valid(cls, instance: Any, *, identity: ComputedSlotIdentity, request: ComputeRequest) -> bool:
+    def _is_valid(cls, instance: Any, *, identity: AnalyticalProductIdentity, request: AnalyticalProductRequest) -> bool:
         """A served instance is valid iff **all three** independent gates pass (E6 + E7)."""
         return (
             not cls._lineage_needs_redo(instance)
@@ -373,7 +373,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return False
 
     @classmethod
-    def _is_age_fresh(cls, instance: Any, *, identity: ComputedSlotIdentity, freshness: Any) -> bool:
+    def _is_age_fresh(cls, instance: Any, *, identity: AnalyticalProductIdentity, freshness: Any) -> bool:
         """Time-freshness gate (E7): is this stored instance still appropriate for the enquiry?"""
         now = datetime.now(tz=UTC)
         if freshness.max_staleness is None:
@@ -391,7 +391,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
     def _persist_many(
         cls,
         scope: ComputeScope,
-        items: list[tuple[ComputedSlotIdentity, ComputedNodeResult, Any | None]],
+        items: list[tuple[AnalyticalProductIdentity, ComputedNodeResult, Any | None]],
     ) -> dict[str, Any]:
         """Persist a computed cohort through the shared bulk graph path."""
         bulk_items = [
@@ -404,7 +404,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
     def _persist(
         cls,
         scope: ComputeScope,
-        identity: ComputedSlotIdentity,
+        identity: AnalyticalProductIdentity,
         compute_result: ComputedNodeResult,
         *,
         retiring: Any,

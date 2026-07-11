@@ -5,7 +5,7 @@ This module is the single source of truth for that key (no parallel family-speci
 
 Rationale: the key is **de-versioned** — *which design produced an instance* lives on the
 ``computes_design`` edge; *whether it is current* is ``lifecycle_status``. Never bake a
-version token into the key. Audit/replay pins a design node via ``ComputeRequest.concept_selection``.
+version token into the key. Audit/replay pins a design node via ``AnalyticalProductRequest.concept_selection``.
 """
 
 
@@ -19,7 +19,7 @@ from agent_neo.util.datetime import TemporalGranularity, period_anchor
 
 
 __all__: tuple[LiteralString, ...] = (
-    'ComputedSlotIdentity',
+    'AnalyticalProductIdentity',
     'build_slot_key',
 )
 
@@ -53,10 +53,10 @@ def build_slot_key(
 
 
 @dataclass(frozen=True, slots=True)
-class ComputedSlotIdentity:
+class AnalyticalProductIdentity:
     """The fully-resolved coordinates of a single computed graph node instance.
 
-    A ``ComputeRequest`` resolves to a *sequence* of these (one per period window in its range);
+    An ``AnalyticalProductRequest`` resolves to a *sequence* of these (one per period window in its range);
     each one addresses exactly one logical slot via :attr:`cache_key`.
     """
 

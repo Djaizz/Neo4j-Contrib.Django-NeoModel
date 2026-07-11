@@ -1,15 +1,15 @@
-"""The canonical :class:`ComputeRequest` for the unified ``.get(request)`` path.
+"""The canonical :class:`AnalyticalProductRequest` for the unified ``.get(request)`` path.
 
-A ``ComputeRequest`` is the *only* way to ask for a computed graph node. It carries identity
+An ``AnalyticalProductRequest`` is the *only* way to ask for a computed graph node. It carries identity
 coordinates (scope, subject, period bounds, temporal_granularity, day/hour classif, design node
 selection) plus serving-side time-freshness (distinct from lineage ``needs_redo``). Given the
-scope timezone it resolves to a maturity-clamped sequence of :class:`ComputedSlotIdentity` slots.
+scope timezone it resolves to a maturity-clamped sequence of :class:`AnalyticalProductIdentity` slots.
 
 Rationale: no force-redo/recompute knob — invalidation is only via lineage/freshness gates
 on ensure-on-read.
 
 Window resolution and maturity clamping live in :mod:`agent_neo.util.datetime`; this module
-composes them into :class:`ComputeRequest`.
+composes them into :class:`AnalyticalProductRequest`.
 """
 
 
@@ -28,14 +28,14 @@ from agent_neo.util.datetime import (
 )
 
 from .freshness import FreshnessPolicy, DEFAULT_FRESHNESS_POLICY
-from .identity import ComputedSlotIdentity
+from .identity import AnalyticalProductIdentity
 
 
-__all__: tuple[LiteralString, ...] = ('ComputeRequest',)
+__all__: tuple[LiteralString, ...] = ('AnalyticalProductRequest',)
 
 
 @dataclass(frozen=True, slots=True)
-class ComputeRequest:
+class AnalyticalProductRequest:
     """A single, canonical ask for a computed graph node (the only entry-point argument).
 
     ``scope_name`` is usually taken from the active :class:`~agent_neo.analytical_product.scope.ComputeScope`
@@ -72,7 +72,7 @@ class ComputeRequest:
         local_tz: tzinfo,
         now: datetime | None = None,
         maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
-    ) -> list[ComputedSlotIdentity]:
+    ) -> list[AnalyticalProductIdentity]:
         """Resolve this request to its maturity-clamped sequence of computed-node identities.
 
         Maturity is a *produceability* gate — may we compute an open-ended window yet? — not
@@ -89,7 +89,7 @@ class ComputeRequest:
             maturity_minutes=maturity_minutes,
         )
         return [
-            ComputedSlotIdentity(
+            AnalyticalProductIdentity(
                 computed_node_class_name=computed_node_class_name,
                 scope_name=scope_name,
                 subject_kind=self.subject_kind,
