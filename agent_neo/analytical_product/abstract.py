@@ -87,7 +87,7 @@ class ComputedNodeResult:
     """The output of a family's ``_compute``: the payload plus the lineage to wire (E6).
 
     ``payload`` holds the family-specific scalar/JSON fields to persist on the instance (e.g.
-    ``{'kwh': 12.3, 'calculation_method': ...}``). The engine sets identity/lifecycle fields itself.
+    ``{'value': 12.3, 'calculation_method': ...}``). The engine sets identity/lifecycle fields itself.
 
     ``dependency_targets`` maps each declared ``DEPENDS_ON_RELS`` slot's ``manager_name`` to the
     already-resolved upstream nodes to connect (peer computed instances, source-layer leaves,
@@ -171,9 +171,9 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         unique_index=True,
         max_length=256,
         label='Logical slot id',
-        help_text='Deterministic over (facility, subject, temporal_granularity, window) — not over the design.',
+        help_text='Deterministic over (scope, subject, temporal_granularity, window) — not over the concept.',
     )
-    facility_name: Property = StringProperty(required=True, index=True)
+    scope_name: Property = StringProperty(required=True, index=True, db_property='facility_name')
     subject_kind: Property = StringProperty(required=True, index=True)
     subject_key: Property = StringProperty(required=True, index=True)
     product_kind: Property = StringProperty(required=True, index=True)
@@ -273,7 +273,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         """Project a persisted instance into a plain serving dict. Override per family for shape."""
         return {
             'cache_key': getattr(instance, 'cache_key', None),
-            'facility_name': getattr(instance, 'facility_name', None),
+            'scope_name': getattr(instance, 'scope_name', None),
             'subject_kind': getattr(instance, 'subject_kind', None),
             'subject_key': getattr(instance, 'subject_key', None),
             'product_kind': getattr(instance, 'product_kind', None),
@@ -463,14 +463,11 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 # ============================================================================
 
 def _scope_name(scope: AnalyticalProductScope) -> str:
-    """Resolve scope identifier from ``scope_name`` or legacy ``facility_name``."""
-    scope_name = getattr(scope, "scope_name", None)
-    if scope_name:
-        return str(scope_name)
-    facility_name = getattr(scope, "facility_name", None)
-    if facility_name:
-        return str(facility_name)
-    raise AttributeError("AnalyticalProductScope does not expose scope_name or facility_name")
+    """Resolve the scope identifier from the active scope object."""
+    name = getattr(scope, "scope_name", None)
+    if name:
+        return str(name)
+    raise AttributeError("AnalyticalProductScope does not expose scope_name")
 
 
 def _local_tz(scope: AnalyticalProductScope) -> tzinfo:

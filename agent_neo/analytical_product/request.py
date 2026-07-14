@@ -40,7 +40,7 @@ class AnalyticalProductRequest:
 
     ``scope_name`` is usually taken from the active :class:`~agent_neo.analytical_product.scope.AnalyticalProductScope`
     rather than passed by callers. ``subject_kind``/``subject_key`` name the topology subject
-    (meter, floor, building, whole_site, zone, plant, asset, …). Period bounds are scope-local
+    (category, group, item, region, …). Period bounds are scope-local
     and may be open-ended; ``None`` bounds resolve to the latest mature period at
     ``temporal_granularity``. ``concept_selection`` is ``'current'`` for normal reads — a sentinel
     meaning "whichever design node is currently in force, ``official`` or ``provisional``" — or

@@ -27,7 +27,7 @@ class PeriodSpineMixin:
         db_property='cache_key',
         max_length=PERIOD_SPINE_MAX_STRING_LENGTH,
     )
-    facility_name: Property = StringProperty(
+    scope_name: Property = StringProperty(
         index=True,
         required=True,
         db_property='facility_name',

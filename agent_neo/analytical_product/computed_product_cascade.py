@@ -184,7 +184,7 @@ def _to_neo4j_datetime(value: datetime) -> Any:
 
 def find_inputs_changed_needs_redo(
     *,
-    facility_name: str | None = None,
+    scope_name: str | None = None,
     now: datetime | None = None,
     max_depth: int = DEFAULT_MAX_CASCADE_DEPTH,
 ) -> list[CascadeImpact]:
@@ -199,14 +199,14 @@ def find_inputs_changed_needs_redo(
     impact set.
     """
     rel_pattern = '|'.join(_CASCADE_REL_TYPES)
-    facility_filter = '' if facility_name is None else 'AND dependent.facility_name = $scope_name '
+    scope_filter = '' if scope_name is None else 'AND dependent.facility_name = $scope_name '
     # Depth-1 timestamp comparison: a dependent is drifted iff some direct input's
     # ``updated`` is newer than the dependent's ``computed_at`` (own ``updated`` then
     # 0 as fallbacks). All compared fields are epoch-second floats.
     query = (
         'MATCH (dependent)-[:' + rel_pattern + ']->(upstream) '
         f'WHERE {_cypher_lifecycle_in_circulation("dependent")} '
-        f'{facility_filter}'
+        f'{scope_filter}'
         'AND coalesce(upstream.updated, 0) > '
         'coalesce(dependent.computed_at, dependent.updated, 0) '
         f'SET dependent.needs_redo_since = $now, {_AUDIT_UPDATED_SET("dependent")} '
@@ -214,8 +214,8 @@ def find_inputs_changed_needs_redo(
         'dependent.cache_key AS cache_key, labels(dependent) AS labels'
     )
     params: dict[str, Any] = {'now': epoch_seconds(now)}
-    if facility_name is not None:
-        params['scope_name'] = facility_name
+    if scope_name is not None:
+        params['scope_name'] = scope_name
 
     def _run() -> list[Any]:
         rows, _ = db.cypher_query(query, params)
@@ -246,21 +246,21 @@ def find_inputs_changed_needs_redo(
     return list(by_element_id.values())
 
 
-def collect_needs_redo_impacts(*, facility_name: str | None = None) -> list[CascadeImpact]:
+def collect_needs_redo_impacts(*, scope_name: str | None = None) -> list[CascadeImpact]:
     """Gather every currently ``needs_redo_since``-flagged current product (for an eager sweep).
 
     Used by the opt-in eager-recompute path to recompute all outstanding marks (e.g. after a
     batch of corrections) without re-walking lineage. Scope to ``scope_name`` to avoid a
     full-store scan whenever possible.
     """
-    facility_filter = '' if facility_name is None else 'AND n.facility_name = $scope_name '
+    scope_filter = "" if scope_name is None else 'AND n.facility_name = $scope_name '
     query = (
         'MATCH (n) WHERE n.needs_redo_since IS NOT NULL '
         f'AND {_cypher_lifecycle_in_circulation("n")} '
-        f'{facility_filter}'
+        f'{scope_filter}'
         'RETURN elementId(n) AS element_id, n.cache_key AS cache_key, labels(n) AS labels'
     )
-    params = {'scope_name': facility_name} if facility_name is not None else {}
+    params = {'scope_name': scope_name} if scope_name is not None else {}
 
     def _run() -> list[Any]:
         rows, _ = db.cypher_query(query, params)

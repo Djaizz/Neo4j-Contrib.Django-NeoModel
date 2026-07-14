@@ -481,7 +481,7 @@ class PopulateProgress:
             f'still working: {self._activity_label} (no progress line for {idle:.0f}s)'
         )
         if idle >= self._stall_warn_sec:
-            message += ' — possible stall (IoT/Neo4j contention?)'
+            message += ' — possible stall (data source contention?)'
         self.say(message, activity=False)
         return True
 
@@ -516,52 +516,6 @@ class PopulateProgress:
             self.say(f'day done ({elapsed:.1f}s)')
         self._day_started_at = None
         self.touch('between days')
-
-    def assets(self, asset_names: list[str], *, desc: str) -> Iterator[str]:
-        """tqdm over asset names (nested under a family step)."""
-        return self.iterate(
-            asset_names,
-            desc=desc,
-            unit='asset',
-            total=len(asset_names),
-            leave=False,
-            scope_desc=False,
-        )
-
-    def meter_bar(
-        self,
-        meter_names: list[str],
-        *,
-        desc: str,
-        unit: str = 'meter',
-    ) -> Iterator[tuple[int, str]]:
-        """Outer meter tqdm (line 1) paired with ``period_bar`` (line 2) for each meter."""
-        if not self.use_tqdm:
-            for meter_index, meter_asset_name in enumerate(meter_names, start=1):
-                self.touch(desc)
-                yield meter_index, meter_asset_name
-            return
-
-        scoped_desc = self._scoped_desc(desc)
-        self.touch(scoped_desc)
-        _ensure_tqdm_terminal_ready()
-        meter_bar = _comma_separated_tqdm(
-            total=len(meter_names),
-            desc=scoped_desc,
-            unit=unit,
-            **_tqdm_kwargs(position=0, leave=False),
-        )
-        self._active_meter_bar = meter_bar
-        self._tqdm_depth = 1
-        try:
-            for meter_index, meter_asset_name in enumerate(meter_names, start=1):
-                yield meter_index, meter_asset_name
-                meter_bar.update(1)
-                meter_bar.refresh()
-        finally:
-            meter_bar.close()
-            self._active_meter_bar = None
-            self._tqdm_depth = 0
 
     @contextmanager
     def period_bar(
@@ -644,59 +598,12 @@ class PopulateProgress:
         if self.enabled and self.verbose:
             self.say(f'    {message}')
 
-    def iot_progress_desc(self, desc: str, *, multi_batch: bool = False) -> str | None:
-        """Return a nested IoT tqdm label, or None when an outer bar already tracks work.
-
-        In compact mode (``use_tqdm``), per-asset Find API lines are suppressed; only
-        heartbeat labels refresh via ``touch``. Nested batch tqdm is kept when
-        ``multi_batch`` (point count exceeds Find API chunk size).
-        """
-        if not self.enabled:
-            return None
-        if self.verbose:
-            self.subphase(desc)
-            return desc
-        if self.use_tqdm and not multi_batch:
-            self.touch(desc)
-            return None
-        self.touch(desc)
-        return desc
-
-    def asset(self, family: str, *, index: int, total: int, asset_name: str) -> None:
-        if not self.enabled or not self.verbose:
-            return
-        every = 1 if total <= 20 else 5
-        if index == 1 or index >= total or index % every == 0:
-            self.say(f'    {family} {index}/{total}: {asset_name}')
-
     def finish(self) -> None:
         if self._phase_started_at is not None and self.enabled and not self.day_only:
             self.flush_cache_collision_summary()
             elapsed = time.monotonic() - self._phase_started_at
             self.say(f'done ({elapsed:.1f}s)')
         self._phase_started_at = None
-
-    def print_plan(
-        self,
-        *,
-        facility_name: str,
-        facility_tz: Any,
-        building_scope: str,
-        from_date: date,
-        to_date: date,
-        days_newest_first: list[date],
-    ) -> None:
-        day_labels = ', '.join(day.isoformat() for day in days_newest_first)
-        self.say(
-            f'plan: {facility_name} building={building_scope} '
-            f'tz={facility_tz} range={format_newest_first_scope_range(from_date.isoformat(), to_date.isoformat())} '
-            f'({len(days_newest_first)} day(s), newest-first: {day_labels})',
-        )
-        if self.enabled and not self.day_only and not self.verbose:
-            self.say(
-                f'heartbeat every {self._heartbeat_interval_sec:.0f}s idle '
-                f'(stall hint after {self._stall_warn_sec:.0f}s)',
-            )
 
     def print_summary(self, summary: dict[str, Any]) -> None:
         self.flush_cache_collision_summary()
