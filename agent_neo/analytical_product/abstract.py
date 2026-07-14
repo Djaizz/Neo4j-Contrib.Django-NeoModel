@@ -1,10 +1,10 @@
 """Computed graph node engine: abstract NeoModel bases + the canonical ``.get(request)`` path.
 
-Every computed family inherits :class:`AbstractAnalyticalComputedProduct`, wires ``computes_design``
+Every computed family inherits :class:`AbstractAnalyticalComputedProduct`, wires ``computes_concept``
 (layer via the design node), implements ``_compute``, and shares one ensure/lineage/freshness
 behavior plus a unified instance spine. Design-node families inherit :class:`AbstractAnalyticalConcept`,
 declare ``LAYER``, and carry design-graph ``DEPENDS_ON_CONCEPT_RELS`` registries plus shared
-lifecycle fields. Identity uses ``cls.__name__`` as ``computed_node_class_name``.
+lifecycle fields. Identity uses ``cls.__name__`` as ``analytical_product_class_name``.
 
 Ensure algorithm::
 
@@ -42,8 +42,8 @@ from agent_neo.util.datetime import coerce_to_utc, coerce_to_utc_for_neo4j_datet
 
 from .computed_product_bulk_persist import BulkPersistItem, persist_many, prefetch_current_by_cache_keys
 from .dependency_registry import (
-    get_computes_design_class,
-    get_computed_node_depends_on_slots,
+    get_computes_concept_class,
+    get_declared_dependencies,
     iter_dependency_managers,
 )
 from .enum import (
@@ -55,9 +55,9 @@ from .identity import AnalyticalProductIdentity
 from .request import AnalyticalProductRequest
 
 if TYPE_CHECKING:
-    from agent_neo.analytical_product.scope import ComputeScope
+    from agent_neo.analytical_product.scope import AnalyticalProductScope
 
-    from .dependency_registry import DependencySlot
+    from .dependency_registry import DeclaredDependency
 
 
 __all__: tuple[LiteralString, ...] = (
@@ -71,10 +71,10 @@ __all__: tuple[LiteralString, ...] = (
 #: this instance was ``computed_at``, means the instance ``needs_redo`` (E6/E7
 #: input-drift gate). Mirrors the cascade engine's ``_CASCADE_REL_TYPES``: the
 #: unified instance-level ``DEPENDS_ON`` graph (peer computed instances and
-#: source-layer leaves) plus the ``computes_design`` bridge to each instance's design node.
+#: source-layer leaves) plus the ``computes_concept`` bridge to each instance's design node.
 _INPUT_REL_PATTERN: str = '|'.join((
     GraphEdgeKind.DEPENDS_ON.value,
-    GraphEdgeKind.COMPUTES_DESIGN.value,
+    GraphEdgeKind.COMPUTES_CONCEPT.value,
 ))
 
 
@@ -96,9 +96,9 @@ class ComputedNodeResult:
 
     payload: dict[str, Any]
     dependency_targets: dict[str, list[Any]] = field(default_factory=dict)
-    #: Single-cardinality provenance edges: the producing design node (``computes_design``) and
+    #: Single-cardinality provenance edges: the producing design node (``computes_concept``) and
     #: the topology subject (``FOR_SUBJECT``). ``None`` leaves any existing edge untouched.
-    computes_design: Any | None = None
+    computes_concept: Any | None = None
     for_subject: Any | None = None
 
 
@@ -119,7 +119,7 @@ class AbstractAnalyticalConcept(DjangoNeoModelWithCreatedAndUpdatedProps):
 
     LAYER: ClassVar[ComputedNodeLayer]
 
-    DEPENDS_ON_CONCEPT_RELS: ClassVar[tuple[DependencySlot, ...]] = ()
+    DEPENDS_ON_CONCEPT_RELS: ClassVar[tuple[DeclaredDependency, ...]] = ()
 
     lifecycle_status: Property = StringProperty(
         index=True,
@@ -150,20 +150,20 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
     A concrete product class must:
 
     - inherit this class (which provides shared identity/lifecycle fields);
-    - declare a ``computes_design`` ``RelationshipTo`` its design node (layer lives on the design node);
+    - declare a ``computes_concept`` ``RelationshipTo`` its design node (layer lives on the design node);
     - declare its lineage relationship managers and family payload fields;
     - implement :meth:`_compute`.
 
-    Cache-key family identity uses ``cls.__name__`` as ``computed_node_class_name``;
+    Cache-key family identity uses ``cls.__name__`` as ``analytical_product_class_name``;
     product classes do not declare a separate class-name attribute.
     """
 
     __abstract_node__: bool = True
 
     #: Override hooks for concrete NeoModel relationship-manager names on the product model.
-    COMPUTES_DESIGN_REL: ClassVar[str] = 'computes_concept'
+    COMPUTES_CONCEPT_REL: ClassVar[str] = 'computes_concept'
     FOR_SUBJECT_REL: ClassVar[str | None] = None
-    DEPENDS_ON_RELS: ClassVar[tuple[DependencySlot, ...]] = ()
+    DEPENDS_ON_RELS: ClassVar[tuple[DeclaredDependency, ...]] = ()
 
     # --- Logical slot identity (no version encoded) ---
     cache_key: Property = StringProperty(
@@ -196,8 +196,8 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 
     @classmethod
     def concept_class(cls) -> type[AbstractAnalyticalConcept]:
-        """Design-node class for this computed family (from ``computes_design`` relationship)."""
-        return get_computes_design_class(cls)
+        """Design-node class for this computed family (from ``computes_concept`` relationship)."""
+        return get_computes_concept_class(cls)
 
     @classmethod
     def layer(cls) -> ComputedNodeLayer:
@@ -205,11 +205,11 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return cls.concept_class().LAYER
 
     @classmethod
-    def get(cls, scope: ComputeScope, request: AnalyticalProductRequest) -> list[Any]:
+    def get(cls, scope: AnalyticalProductScope, request: AnalyticalProductRequest) -> list[Any]:
         """Ensure-on-read every period instance the request resolves to; return the instances."""
         local_tz = _local_tz(scope)
         identities = request.resolve_identities(
-            computed_node_class_name=cls.__name__,
+            analytical_product_class_name=cls.__name__,
             scope_name=_scope_name(scope),
             local_tz=local_tz,
         )
@@ -237,7 +237,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return [instances_by_cache_key[i.cache_key] for i in identities if i.cache_key in instances_by_cache_key]
 
     @classmethod
-    def serve(cls, scope: ComputeScope, request: AnalyticalProductRequest) -> list[dict[str, Any]]:
+    def serve(cls, scope: AnalyticalProductScope, request: AnalyticalProductRequest) -> list[dict[str, Any]]:
         """Boundary-checked serving form (E2/E11): Views only."""
         if not cls.layer().is_served:
             raise TypeError(
@@ -247,7 +247,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return [cls.to_payload(instance) for instance in cls.get(scope, request)]
 
     @classmethod
-    def ensure_one(cls, scope: ComputeScope, identity: AnalyticalProductIdentity, request: AnalyticalProductRequest) -> Any:
+    def ensure_one(cls, scope: AnalyticalProductScope, identity: AnalyticalProductIdentity, request: AnalyticalProductRequest) -> Any:
         """Fetch the valid current instance at ``identity`` or compute, persist, and retire the prior one."""
         existing = cls._probe_current(identity)
         if (
@@ -264,7 +264,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
     # ------------------------------------------------------------------
 
     @classmethod
-    def _compute(cls, scope: ComputeScope, identity: AnalyticalProductIdentity, request: AnalyticalProductRequest) -> ComputedNodeResult:
+    def _compute(cls, scope: AnalyticalProductScope, identity: AnalyticalProductIdentity, request: AnalyticalProductRequest) -> ComputedNodeResult:
         """Produce the payload + lineage for one computed graph node instance. Override per family."""
         raise NotImplementedError(f'{cls.__name__} must implement _compute()')
 
@@ -344,7 +344,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         if getattr(instance, 'needs_redo_since', None) is not None:
             return True
 
-        concept_manager = getattr(instance, cls.COMPUTES_DESIGN_REL, None)
+        concept_manager = getattr(instance, cls.COMPUTES_CONCEPT_REL, None)
         if concept_manager is not None:
             try:
                 concepts = list(concept_manager.all())
@@ -358,7 +358,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
                 ):
                     return True
 
-        for manager in iter_dependency_managers(instance, get_computed_node_depends_on_slots(cls)):
+        for manager in iter_dependency_managers(instance, get_declared_dependencies(cls)):
             try:
                 dependencies = list(manager.all())
             except CardinalityViolation:
@@ -390,7 +390,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
     @classmethod
     def _persist_many(
         cls,
-        scope: ComputeScope,
+        scope: AnalyticalProductScope,
         items: list[tuple[AnalyticalProductIdentity, ComputedNodeResult, Any | None]],
     ) -> dict[str, Any]:
         """Persist a computed cohort through the shared bulk graph path."""
@@ -403,7 +403,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
     @classmethod
     def _persist(
         cls,
-        scope: ComputeScope,
+        scope: AnalyticalProductScope,
         identity: AnalyticalProductIdentity,
         compute_result: ComputedNodeResult,
         *,
@@ -462,7 +462,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 # Module helpers
 # ============================================================================
 
-def _scope_name(scope: ComputeScope) -> str:
+def _scope_name(scope: AnalyticalProductScope) -> str:
     """Resolve scope identifier from ``scope_name`` or legacy ``facility_name``."""
     scope_name = getattr(scope, "scope_name", None)
     if scope_name:
@@ -470,16 +470,16 @@ def _scope_name(scope: ComputeScope) -> str:
     facility_name = getattr(scope, "facility_name", None)
     if facility_name:
         return str(facility_name)
-    raise AttributeError("ComputeScope does not expose scope_name or facility_name")
+    raise AttributeError("AnalyticalProductScope does not expose scope_name or facility_name")
 
 
-def _local_tz(scope: ComputeScope) -> tzinfo:
-    """Resolve the scope-local timezone from the active ComputeScope."""
+def _local_tz(scope: AnalyticalProductScope) -> tzinfo:
+    """Resolve the scope-local timezone from the active AnalyticalProductScope."""
     for attr in ("local_tz", "tz", "timezone"):
         candidate = getattr(scope, attr, None)
         if isinstance(candidate, tzinfo):
             return candidate
-    raise AttributeError("ComputeScope does not expose a timezone (local_tz/tz/timezone)")
+    raise AttributeError("AnalyticalProductScope does not expose a timezone (local_tz/tz/timezone)")
 
 
 def _set_if_present(node: Any, field_name: str, value: Any) -> None:

@@ -54,7 +54,7 @@ def collect_daily_dep_instances_for_monthly_identity(
     daily_dep_instances: list[Any] = []
     for window_start, window_end in daily_windows:
         daily_identity = AnalyticalProductIdentity(
-            computed_node_class_name=slot_identity.computed_node_class_name,
+            analytical_product_class_name=slot_identity.analytical_product_class_name,
             scope_name=slot_identity.scope_name,
             subject_kind=slot_identity.subject_kind,
             subject_key=slot_identity.subject_key,

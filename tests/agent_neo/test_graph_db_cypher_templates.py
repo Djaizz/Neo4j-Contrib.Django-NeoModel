@@ -63,7 +63,7 @@ def test_preload_period_rollups_by_spine_window_template() -> None:
 def test_spine_window_where_clauses_omit_algorithm_version() -> None:
     clauses, params = spine_window_where_clauses(
         facility_name='Fac',
-        time_granularity='daily',
+        temporal_granularity='daily',
         local_period_start_gte='2026-01-01T00:00',
         local_period_start_lt='2026-02-01T00:00',
     )

@@ -1,17 +1,33 @@
-"""Compute scope protocol."""
+"""Analytical-product scope protocol (the minimal compute-scope surface)."""
 
 
 from __future__ import annotations
 
 from datetime import tzinfo
-from typing import LiteralString, Protocol
+from typing import Protocol, runtime_checkable
 
 
-__all__: tuple[LiteralString, ...] = ("ComputeScope",)
+__all__ = ("AnalyticalProductScope",)
 
 
-class ComputeScope(Protocol):
+@runtime_checkable
+class AnalyticalProductScope(Protocol):
+    """Minimal scope surface for analytical-product computation.
+
+    Carries the facility/scope identifier (``scope_name``) and the
+    facility-local timezone (``local_tz``, aliased as ``tz``).
+    """
+
     scope_name: str
 
     @property
     def local_tz(self) -> tzinfo: ...
+
+    @property
+    def tz(self) -> tzinfo:
+        """Alias for :attr:`local_tz`."""
+        return self.local_tz
+
+
+# Backward-compat alias.
+ComputeScope = AnalyticalProductScope

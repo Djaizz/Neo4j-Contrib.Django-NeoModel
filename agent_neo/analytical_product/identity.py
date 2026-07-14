@@ -4,7 +4,7 @@ Every computed graph node instance is addressed by **one** deterministic logical
 This module is the single source of truth for that key (no parallel family-specific builders).
 
 Rationale: the key is **de-versioned** — *which design produced an instance* lives on the
-``computes_design`` edge; *whether it is current* is ``lifecycle_status``. Never bake a
+``computes_concept`` edge; *whether it is current* is ``lifecycle_status``. Never bake a
 version token into the key. Audit/replay pins a design node via ``AnalyticalProductRequest.concept_selection``.
 """
 
@@ -20,13 +20,13 @@ from agent_neo.util.datetime import TemporalGranularity, period_anchor
 
 __all__: tuple[LiteralString, ...] = (
     'AnalyticalProductIdentity',
-    'build_slot_key',
+    'build_cache_key',
 )
 
 
-def build_slot_key(
+def build_cache_key(
     *,
-    computed_node_class_name: str,
+    analytical_product_class_name: str,
     scope_name: str,
     subject_kind: str,
     subject_key: str,
@@ -39,14 +39,14 @@ def build_slot_key(
 
     Format (de-versioned)::
 
-        {computed_node_class_name}|{scope_name}|{subject_kind}={subject_key}|{temporal_granularity}|{period_anchor}
+        {analytical_product_class_name}|{scope_name}|{subject_kind}={subject_key}|{temporal_granularity}|{period_anchor}
 
     When either classification is non-``all`` the key is suffixed with ``|d={day}|h={hour}`` so
     sliced rollups occupy distinct slots; the common unsliced case omits the suffix.
-    ``computed_node_class_name`` is the concrete class name (``cls.__name__``).
+    ``analytical_product_class_name`` is the concrete class name (``cls.__name__``).
     """
     anchor = period_anchor(temporal_granularity=temporal_granularity, local_period_start=local_period_start)
-    base = f'{computed_node_class_name}|{scope_name}|{subject_kind}={subject_key}|{temporal_granularity}|{anchor}'
+    base = f'{analytical_product_class_name}|{scope_name}|{subject_kind}={subject_key}|{temporal_granularity}|{anchor}'
     if day_classif == 'all' and hour_classif == 'all':
         return base
     return f'{base}|d={day_classif}|h={hour_classif}'
@@ -60,7 +60,7 @@ class AnalyticalProductIdentity:
     each one addresses exactly one logical slot via :attr:`cache_key`.
     """
 
-    computed_node_class_name: str
+    analytical_product_class_name: str
     scope_name: str
     subject_kind: str
     subject_key: str
@@ -73,8 +73,8 @@ class AnalyticalProductIdentity:
     @property
     def cache_key(self) -> str:
         """The canonical de-versioned slot id for this identity."""
-        return build_slot_key(
-            computed_node_class_name=self.computed_node_class_name,
+        return build_cache_key(
+            analytical_product_class_name=self.analytical_product_class_name,
             scope_name=self.scope_name,
             subject_kind=self.subject_kind,
             subject_key=self.subject_key,

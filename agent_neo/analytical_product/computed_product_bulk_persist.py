@@ -30,7 +30,7 @@ from .enum import (
 from .identity import AnalyticalProductIdentity
 
 if TYPE_CHECKING:
-    from agent_neo.analytical_product.scope import ComputeScope
+    from agent_neo.analytical_product.scope import AnalyticalProductScope
 
     from .abstract import ComputedNodeResult
 
@@ -54,7 +54,7 @@ class BulkPersistItem:
     retiring: Any | None
 
 
-def persist_many(product_cls: type, scope: ComputeScope, items: list[BulkPersistItem]) -> dict[str, Any]:
+def persist_many(product_cls: type, scope: AnalyticalProductScope, items: list[BulkPersistItem]) -> dict[str, Any]:
     """Persist a computed cohort and return the current nodes keyed by ``cache_key``.
 
     Implements retire-not-mutate at set scale (mint/refresh current, flip prior to
@@ -82,9 +82,9 @@ def persist_many(product_cls: type, scope: ComputeScope, items: list[BulkPersist
     cache_keys = [row['cache_key'] for row in upsert_rows]
     upserted_element_ids_by_cache_key = _bulk_upsert_nodes(product_cls, upsert_rows, now_epoch_seconds)
 
-    from .dependency_registry import collect_dependency_targets, get_computed_node_depends_on_slots
+    from .dependency_registry import collect_dependency_targets, get_declared_dependencies
 
-    depends_on_slots = get_computed_node_depends_on_slots(product_cls)
+    depends_on_slots = get_declared_dependencies(product_cls)
     for slot in depends_on_slots:
         _bulk_replace_relationships(
             product_cls,
@@ -98,14 +98,14 @@ def persist_many(product_cls: type, scope: ComputeScope, items: list[BulkPersist
                 ],
             ),
         )
-    computes_design_rel_name = getattr(product_cls, 'COMPUTES_DESIGN_REL', 'computes_design')
+    computes_concept_rel_name = getattr(product_cls, 'COMPUTES_CONCEPT_REL', 'computes_concept')
     _bulk_replace_relationships(
         product_cls,
         _single_relationship_rows(
             cache_keys=cache_keys,
-            rel_name=computes_design_rel_name,
-            rel_type=GraphEdgeKind.COMPUTES_DESIGN.value,
-            targets=[item.compute_result.computes_design for item in items],
+            rel_name=computes_concept_rel_name,
+            rel_type=GraphEdgeKind.COMPUTES_CONCEPT.value,
+            targets=[item.compute_result.computes_concept for item in items],
         ),
     )
     for_subject_rel_name = getattr(product_cls, 'FOR_SUBJECT_REL', None)
@@ -149,7 +149,7 @@ def prefetch_current_by_cache_keys(product_cls: type, cache_keys: Iterable[str])
 
 def _product_kind(product_cls: type, compute_result: ComputedNodeResult) -> str:
     """Resolve ``product_kind`` from the design node or the wired design node's ``LAYER``."""
-    concept = compute_result.computes_design
+    concept = compute_result.computes_concept
     if concept is not None:
         concept_product_kind = getattr(concept, 'product_kind', None)
         if concept_product_kind:
@@ -379,12 +379,12 @@ def _mark_bulk_changed_nodes(*, changed_element_ids: list[str]) -> None:
     mark_impacted_needs_redo(changed_element_ids=clean_element_ids)
 
 
-def _local_tz(scope: ComputeScope) -> tzinfo:
+def _local_tz(scope: AnalyticalProductScope) -> tzinfo:
     for attr in ('local_tz', 'tz', 'timezone'):
         candidate = getattr(scope, attr, None)
         if isinstance(candidate, tzinfo):
             return candidate
-    raise AttributeError('ComputeScope does not expose a facility timezone (local_tz/tz/timezone)')
+    raise AttributeError('AnalyticalProductScope does not expose a facility timezone (local_tz/tz/timezone)')
 
 
 def _label(model_class: type) -> str:

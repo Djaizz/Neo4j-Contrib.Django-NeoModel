@@ -69,7 +69,7 @@ class NodeLifecycleStatus(StrEnum):
     """Replaces version numbers as the marker of what is current.
 
     - ``OFFICIAL`` and ``PROVISIONAL`` are both "in circulation": at most one instance/design
-      node per identity (``cache_key`` or ``computed_node_class_name``) is ``OFFICIAL``, at
+      node per identity (``cache_key`` or ``analytical_product_class_name``) is ``OFFICIAL``, at
       most one is ``PROVISIONAL``; both are served and both are included in cascade/``needs_redo``
       scope.
     - ``RETIRED`` is the only "no longer current" state, retained for audit/replay until an
@@ -90,7 +90,6 @@ class GraphEdgeKind(StrEnum):
     COMPUTES_CONCEPT = "COMPUTES_CONCEPT"
     FOR_SUBJECT = "FOR_SUBJECT"
     DEPENDS_ON = "DEPENDS_ON"
-    COMPUTES_DESIGN = "COMPUTES_CONCEPT"
 
 
 AnalyticalProductRelType = GraphEdgeKind

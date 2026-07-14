@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, LiteralString, Protocol, runtime_checkable
+from typing import Any, Callable, LiteralString
 
 from agent_neo.analytical_product.abstract import (
     AbstractAnalyticalComputedProduct,
@@ -12,23 +12,16 @@ from agent_neo.analytical_product.abstract import (
 )
 from agent_neo.analytical_product.enum import NodeLifecycleStatus
 from agent_neo.analytical_product.request import AnalyticalProductRequest
+from agent_neo.analytical_product.scope import AnalyticalProductScope
 from agent_neo.util.json_safe import json_safe_structure
 
 
 __all__: tuple[LiteralString, ...] = (
-    'ComputeScope',
+    'AnalyticalProductScope',
     'metric_identity_from_view_identity',
     'project_metric_instance_to_payload',
     'serve_multi_row_metric_projection',
 )
-
-
-@runtime_checkable
-class ComputeScope(Protocol):
-    """Minimal scope surface for metric projection (facility timezone, etc.)."""
-
-    @property
-    def tz(self) -> Any: ...
 
 
 def metric_identity_from_view_identity(
@@ -53,7 +46,7 @@ def metric_identity_from_view_identity(
 
 def project_metric_instance_to_payload(
     metric_set_class: type[Any],
-    compute_scope: ComputeScope,
+    compute_scope: AnalyticalProductScope,
     metric_instance: Any,
 ) -> dict[str, Any]:
     """Project one MetricSet node using the family's payload helper."""
@@ -65,7 +58,7 @@ def project_metric_instance_to_payload(
 
 def serve_multi_row_metric_projection(
     metric_set_class: type[AbstractAnalyticalComputedProduct],
-    compute_scope: ComputeScope,
+    compute_scope: AnalyticalProductScope,
     request: AnalyticalProductRequest,
     *,
     serialize: Callable[[Any], dict[str, Any]],
@@ -100,7 +93,7 @@ def ensure_official_concept(
 
 def serve_projected_payload_rows(
     view_set_class: type[AbstractAnalyticalComputedProduct],
-    compute_scope: ComputeScope,
+    compute_scope: AnalyticalProductScope,
     request: AnalyticalProductRequest,
 ) -> list[dict[str, Any]]:
     """Serve persisted ``projected_payload_json`` from ViewSet instances."""

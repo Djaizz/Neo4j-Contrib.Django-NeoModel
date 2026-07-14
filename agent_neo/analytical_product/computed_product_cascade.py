@@ -11,7 +11,7 @@ import logging
 
 from neomodel.sync_.database import db
 
-from agent_neo.analytical_product.registry import iter_registered_computed_node_classes
+from agent_neo.analytical_product.registry import iter_registered_analytical_product_classes
 from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from agent_neo.util.datetime import TemporalGranularity, epoch_seconds
 
@@ -19,7 +19,7 @@ from .enum import GraphEdgeKind, NodeLifecycleStatus
 from .request import AnalyticalProductRequest
 
 if TYPE_CHECKING:
-    from agent_neo.analytical_product.scope import ComputeScope
+    from agent_neo.analytical_product.scope import AnalyticalProductScope
 
 
 __all__: tuple[LiteralString, ...] = (
@@ -43,11 +43,11 @@ log = logging.getLogger(__name__)
 DEFAULT_MAX_CASCADE_DEPTH: int = 25
 
 #: Lineage edge types whose *inbound* traversal reaches dependents of a change:
-#: the unified instance-level ``DEPENDS_ON`` graph plus the ``computes_design``
+#: the unified instance-level ``DEPENDS_ON`` graph plus the ``computes_concept``
 #: bridge to each instance's design node.
 _CASCADE_REL_TYPES: tuple[str, ...] = (
     GraphEdgeKind.DEPENDS_ON.value,
-    GraphEdgeKind.COMPUTES_DESIGN.value,
+    GraphEdgeKind.COMPUTES_CONCEPT.value,
 )
 
 
@@ -307,7 +307,7 @@ class _RecomputeGroup:
 
 
 def recompute_needs_redo(
-    scope: ComputeScope,
+    scope: AnalyticalProductScope,
     impacts: list[CascadeImpact],
 ) -> dict[str, Any]:
     """Opt-in eager sweep: recompute marked nodes in layered-stack dependency order.
@@ -466,7 +466,7 @@ def _product_class_registry() -> dict[str, type]:
         return _REGISTRY_CACHE
 
     registry: dict[str, type] = {}
-    for product_cls in iter_registered_computed_node_classes():
+    for product_cls in iter_registered_analytical_product_classes():
         label = getattr(product_cls, '__label__', None)
         if label:
             registry[label] = product_cls

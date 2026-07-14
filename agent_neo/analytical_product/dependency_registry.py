@@ -11,25 +11,25 @@ from neomodel.sync_.relationship_manager import RelationshipDefinition
 
 from agent_neo.analytical_product.registry import (
     _EXTRA_RELATIONSHIP_TARGET_RESOLVERS,
-    iter_registered_computed_node_classes,
-    iter_registered_design_node_classes,
+    iter_registered_analytical_product_classes,
+    iter_registered_analytical_concept_classes,
 )
 
 from .enum import GraphEdgeKind
 
 
 __all__: tuple[LiteralString, ...] = (
-    'DependencySlot',
+    'DeclaredDependency',
     'collect_dependency_targets',
     'dependency_manager_names',
-    'get_computes_design_class',
-    'get_design_depends_on_design_slots',
-    'get_computed_node_depends_on_slots',
-    'infer_depends_on_slots_from_managers',
+    'get_computes_concept_class',
+    'get_declared_concept_dependencies',
+    'get_declared_dependencies',
+    'infer_declared_dependencies_from_managers',
     'iter_dependency_managers',
     'validate_all_dependency_registries',
-    'validate_design_dependency_registry',
-    'validate_computed_node_dependency_registry',
+    'validate_concept_dependency_registry',
+    'validate_dependency_registry',
 )
 
 
@@ -39,7 +39,7 @@ _VALIDATED: bool = False
 
 
 @dataclass(frozen=True, slots=True)
-class DependencySlot:
+class DeclaredDependency:
     """One upstream dependency edge declared on a computed node or design-node class."""
 
     target_class: type
@@ -47,7 +47,7 @@ class DependencySlot:
     rel_type: GraphEdgeKind = GraphEdgeKind.DEPENDS_ON
 
 
-def get_computed_node_depends_on_slots(product_cls: type) -> tuple[DependencySlot, ...]:
+def get_declared_dependencies(product_cls: type) -> tuple[DeclaredDependency, ...]:
     """Return the ``DEPENDS_ON_RELS`` registry for a computed graph node class."""
     cached_slots = getattr(product_cls, '_DEPENDS_ON_RELS_CACHE', None)
     if cached_slots is not None:
@@ -57,23 +57,23 @@ def get_computed_node_depends_on_slots(product_cls: type) -> tuple[DependencySlo
         cached_slots = tuple(declared_registry)
         product_cls._DEPENDS_ON_RELS_CACHE = cached_slots
         return cached_slots
-    inferred_slots = infer_depends_on_slots_from_managers(product_cls)
+    inferred_slots = infer_declared_dependencies_from_managers(product_cls)
     product_cls._DEPENDS_ON_RELS_CACHE = inferred_slots
     if inferred_slots:
         product_cls.DEPENDS_ON_RELS = inferred_slots
     return inferred_slots
 
 
-def get_computes_design_class(product_cls: type) -> type:
-    """Return the design-node class wired by the product's ``computes_design`` relationship."""
+def get_computes_concept_class(product_cls: type) -> type:
+    """Return the design-node class wired by the product's ``computes_concept`` relationship."""
     cached_design_node_class = getattr(product_cls, '_COMPUTES_DESIGN_CLS_CACHE', None)
     if cached_design_node_class is not None:
         return cached_design_node_class
-    computes_design_rel_name = getattr(product_cls, 'COMPUTES_DESIGN_REL', 'computes_design')
-    relationship_manager = getattr(product_cls, computes_design_rel_name, None)
+    computes_concept_rel_name = getattr(product_cls, 'COMPUTES_CONCEPT_REL', 'computes_concept')
+    relationship_manager = getattr(product_cls, computes_concept_rel_name, None)
     if relationship_manager is None or not isinstance(relationship_manager, RelationshipDefinition):
         raise TypeError(
-            f'{product_cls.__name__} has no {computes_design_rel_name!r} NeoModel RelationshipTo manager',
+            f'{product_cls.__name__} has no {computes_concept_rel_name!r} NeoModel RelationshipTo manager',
         )
     concept_class = _resolve_relationship_target_class(
         relationship_manager,
@@ -83,7 +83,7 @@ def get_computes_design_class(product_cls: type) -> type:
     return concept_class
 
 
-def get_design_depends_on_design_slots(concept_cls: type) -> tuple[DependencySlot, ...]:
+def get_declared_concept_dependencies(concept_cls: type) -> tuple[DeclaredDependency, ...]:
     """Return the ``DEPENDS_ON_CONCEPT_RELS`` registry for a design-node class."""
     registry = getattr(concept_cls, 'DEPENDS_ON_CONCEPT_RELS', None)
     if registry is None:
@@ -91,12 +91,12 @@ def get_design_depends_on_design_slots(concept_cls: type) -> tuple[DependencySlo
     return tuple(registry)
 
 
-def dependency_manager_names(slots: Iterable[DependencySlot]) -> tuple[str, ...]:
+def dependency_manager_names(slots: Iterable[DeclaredDependency]) -> tuple[str, ...]:
     """NeoModel manager attribute names for the given dependency slots."""
     return tuple(slot.manager_name for slot in slots)
 
 
-def iter_dependency_managers(instance: Any, slots: Iterable[DependencySlot]) -> Iterable[Any]:
+def iter_dependency_managers(instance: Any, slots: Iterable[DeclaredDependency]) -> Iterable[Any]:
     """Yield NeoModel relationship managers for each declared dependency slot."""
     for slot in slots:
         manager = getattr(instance, slot.manager_name, None)
@@ -106,7 +106,7 @@ def iter_dependency_managers(instance: Any, slots: Iterable[DependencySlot]) -> 
 
 def collect_dependency_targets(
     compute_result: Any,
-    slots: Iterable[DependencySlot],
+    slots: Iterable[DeclaredDependency],
 ) -> dict[str, list[Any]]:
     """Build manager-name -> target-node lists from a compute result and slot registry."""
     dependency_targets = getattr(compute_result, 'dependency_targets', None) or {}
@@ -140,22 +140,22 @@ def _resolve_relationship_target_class(
             resolved_class = None
         if resolved_class is not None:
             return resolved_class
-    for candidate_class in (*iter_registered_computed_node_classes(), *iter_registered_design_node_classes()):
+    for candidate_class in (*iter_registered_analytical_product_classes(), *iter_registered_analytical_concept_classes()):
         if candidate_class.__name__ == target_class_name:
             return candidate_class
     raise ValueError(f'Unknown RelationshipTo target class {target_class_name!r}')
 
 
-def infer_depends_on_slots_from_managers(product_cls: type) -> tuple[DependencySlot, ...]:
+def infer_declared_dependencies_from_managers(product_cls: type) -> tuple[DeclaredDependency, ...]:
     """Build ``DEPENDS_ON_RELS`` slots from declared ``DEPENDS_ON``-typed ``RelationshipTo`` managers."""
-    inferred_slots: list[DependencySlot] = []
+    inferred_slots: list[DeclaredDependency] = []
     for attribute_name, attribute_value in vars(product_cls).items():
         if not isinstance(attribute_value, RelationshipDefinition):
             continue
         if _relationship_rel_type_value(attribute_value) != GraphEdgeKind.DEPENDS_ON.value:
             continue
         inferred_slots.append(
-            DependencySlot(
+            DeclaredDependency(
                 target_class=_resolve_relationship_target_class(
                     attribute_value,
                     owning_class=product_cls,
@@ -188,7 +188,7 @@ def _relationship_rel_type_value(manager: RelationshipDefinition) -> str | None:
     return getattr(relation_type, 'value', relation_type)
 
 
-def validate_computed_node_dependency_registry(product_cls: type) -> list[str]:
+def validate_dependency_registry(product_cls: type) -> list[str]:
     """Validate ``DEPENDS_ON_RELS`` against declared NeoModel ``RelationshipTo`` managers."""
     errors: list[str] = []
     class_name = getattr(product_cls, '__name__', repr(product_cls))
@@ -196,7 +196,7 @@ def validate_computed_node_dependency_registry(product_cls: type) -> list[str]:
     declared_slots = (
         tuple(explicit_registry)
         if explicit_registry is not None and 'DEPENDS_ON_RELS' in product_cls.__dict__
-        else get_computed_node_depends_on_slots(product_cls)
+        else get_declared_dependencies(product_cls)
     )
     declared_manager_names = {slot.manager_name for slot in declared_slots}
 
@@ -237,11 +237,11 @@ def validate_computed_node_dependency_registry(product_cls: type) -> list[str]:
     return errors
 
 
-def validate_design_dependency_registry(concept_cls: type) -> list[str]:
+def validate_concept_dependency_registry(concept_cls: type) -> list[str]:
     """Validate ``DEPENDS_ON_CONCEPT_RELS`` against design-node ``RelationshipTo`` managers."""
     errors: list[str] = []
     class_name = getattr(concept_cls, '__name__', repr(concept_cls))
-    declared_slots = get_design_depends_on_design_slots(concept_cls)
+    declared_slots = get_declared_concept_dependencies(concept_cls)
     declared_manager_names = {slot.manager_name for slot in declared_slots}
 
     for slot in declared_slots:
@@ -282,11 +282,11 @@ def validate_design_dependency_registry(concept_cls: type) -> list[str]:
 def validate_all_dependency_registries(*, strict: bool = True) -> list[str]:
     """Validate dependency registries for all registered computed and design-node classes."""
     errors: list[str] = []
-    for product_cls in iter_registered_computed_node_classes():
-        get_computed_node_depends_on_slots(product_cls)
-        errors.extend(validate_computed_node_dependency_registry(product_cls))
-    for concept_cls in iter_registered_design_node_classes():
-        errors.extend(validate_design_dependency_registry(concept_cls))
+    for product_cls in iter_registered_analytical_product_classes():
+        get_declared_dependencies(product_cls)
+        errors.extend(validate_dependency_registry(product_cls))
+    for concept_cls in iter_registered_analytical_concept_classes():
+        errors.extend(validate_concept_dependency_registry(concept_cls))
 
     global _VALIDATED
     _VALIDATED = True

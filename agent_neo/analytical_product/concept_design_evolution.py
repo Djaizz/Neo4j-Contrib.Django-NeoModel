@@ -2,11 +2,11 @@
 
 Rationale: never bump a version scalar. Mint a new ``official`` design node and flip the
 prior to ``retired`` (no ``SUPERSEDES`` edge). That ``.save()`` fires signal handlers,
-which mark every instance that ``computes_design`` the retired design node as ``needs_redo``
+which mark every instance that ``computes_concept`` the retired design node as ``needs_redo``
 — design change converges like data change, without per-family invalidation.
 
 Note: design-graph ``DEPENDS_ON_CONCEPT`` is wired here, but instance cascade does not yet
-walk that edge. Retirement of a producing design node still fans out via ``computes_design``.
+walk that edge. Retirement of a producing design node still fans out via ``computes_concept``.
 """
 
 
@@ -62,9 +62,9 @@ def reconnect_concept_depends_on_concepts(
     declares ``DEPENDS_ON_CONCEPT_RELS``, the first slot's manager name is used; otherwise
     ``depends_on_concept`` or raw Cypher is used.
     """
-    from .dependency_registry import get_design_depends_on_design_slots
+    from .dependency_registry import get_declared_concept_dependencies
 
-    concept_slots = get_design_depends_on_design_slots(concept.__class__)
+    concept_slots = get_declared_concept_dependencies(concept.__class__)
     if len(concept_slots) == 1:
         rel_name = concept_slots[0].manager_name
     else:
@@ -144,7 +144,7 @@ def retire_concept(
     """Retire ``previous`` (no relationship is created between ``current`` and ``previous``).
 
     Saving ``previous`` with ``lifecycle_status='retired'`` is the cascade hook: the ``post_save``
-    receiver marks every instance that ``computes_design`` it ``needs_redo``. ``current`` must
+    receiver marks every instance that ``computes_concept`` it ``needs_redo``. ``current`` must
     already be saved (it is the new official design node). A no-op if there is no real
     predecessor (including when ``previous`` and ``current`` are the same Neo4j node).
 
@@ -163,6 +163,6 @@ def retire_concept(
         previous.retired_at = now or datetime.now(tz=UTC)
     if reason and hasattr(type(previous), 'retirement_reason'):
         previous.retirement_reason = reason
-    previous.save()  # fires post_save -> cascade marks computes_design instances needs_redo
+    previous.save()  # fires post_save -> cascade marks computes_concept instances needs_redo
 
     return current

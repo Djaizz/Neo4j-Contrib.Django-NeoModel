@@ -38,7 +38,7 @@ __all__: tuple[LiteralString, ...] = ('AnalyticalProductRequest',)
 class AnalyticalProductRequest:
     """A single, canonical ask for a computed graph node (the only entry-point argument).
 
-    ``scope_name`` is usually taken from the active :class:`~agent_neo.analytical_product.scope.ComputeScope`
+    ``scope_name`` is usually taken from the active :class:`~agent_neo.analytical_product.scope.AnalyticalProductScope`
     rather than passed by callers. ``subject_kind``/``subject_key`` name the topology subject
     (meter, floor, building, whole_site, zone, plant, asset, …). Period bounds are scope-local
     and may be open-ended; ``None`` bounds resolve to the latest mature period at
@@ -67,7 +67,7 @@ class AnalyticalProductRequest:
     def resolve_identities(
         self,
         *,
-        computed_node_class_name: str,
+        analytical_product_class_name: str,
         scope_name: str,
         local_tz: tzinfo,
         now: datetime | None = None,
@@ -90,7 +90,7 @@ class AnalyticalProductRequest:
         )
         return [
             AnalyticalProductIdentity(
-                computed_node_class_name=computed_node_class_name,
+                analytical_product_class_name=analytical_product_class_name,
                 scope_name=scope_name,
                 subject_kind=self.subject_kind,
                 subject_key=self.subject_key,
