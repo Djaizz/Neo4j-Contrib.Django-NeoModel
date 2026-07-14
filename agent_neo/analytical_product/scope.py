@@ -28,6 +28,3 @@ class AnalyticalProductScope(Protocol):
         """Alias for :attr:`local_tz`."""
         return self.local_tz
 
-
-# Backward-compat alias.
-ComputeScope = AnalyticalProductScope

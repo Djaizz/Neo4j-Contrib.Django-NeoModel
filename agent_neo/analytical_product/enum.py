@@ -20,7 +20,6 @@ __all__: tuple[LiteralString, ...] = (
     'ComputedNodeLayer',
     'NodeLifecycleStatus',
     'GraphEdgeKind',
-    'AnalyticalProductRelType',
     )
 
 
@@ -90,6 +89,3 @@ class GraphEdgeKind(StrEnum):
     COMPUTES_CONCEPT = "COMPUTES_CONCEPT"
     FOR_SUBJECT = "FOR_SUBJECT"
     DEPENDS_ON = "DEPENDS_ON"
-
-
-AnalyticalProductRelType = GraphEdgeKind
