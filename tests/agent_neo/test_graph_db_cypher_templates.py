@@ -62,12 +62,15 @@ def test_preload_period_rollups_by_spine_window_template() -> None:
 
 def test_spine_window_where_clauses_omit_algorithm_version() -> None:
     clauses, params = spine_window_where_clauses(
-        facility_name='Fac',
+        scope_name='Fac',
         temporal_granularity='daily',
         local_period_start_gte='2026-01-01T00:00',
         local_period_start_lt='2026-02-01T00:00',
     )
-    assert 'n.facility_name = $facility_name' in clauses
+    # The de-domaining refactor renamed the keyword argument but not the graph
+    # property, so the clause still reads `facility_name` while the bound
+    # parameter is `scope_name`.
+    assert 'n.facility_name = $scope_name' in clauses
     assert 'n.local_period_start >= $local_period_start_gte' in clauses
     assert 'algorithm_version' not in params
     assert not any('algorithm_version' in clause for clause in clauses)
