@@ -454,6 +454,84 @@ def _parse_return_headers(query_text: str) -> list[str]:
     return column_names
 
 
+def _split_row_by_item_budget(
+    row: dict[str, Any],
+    *,
+    count_key: str,
+    batch_size: int,
+) -> list[dict[str, Any]]:
+    """Split one row into sub-rows whose ``count_key`` lists each fit ``batch_size``.
+
+    Every other key is copied verbatim onto each sub-row, so the sub-rows are the
+    same statement applied to slices of one subject's item list. Only correct for
+    an **idempotent** payload — an additive `MERGE`, or a `DELETE` of named
+    targets — where processing a subset and then the rest reaches the same end
+    state as processing the whole. A replace-all write must never be split: its
+    delete-then-rebuild is atomic per row, and a second sub-row would delete what
+    the first one wrote.
+    """
+    items: list[Any] = list(row[count_key])
+    if len(items) <= batch_size:
+        return [row]
+    return [
+        {**row, count_key: items[start:start + batch_size]}
+        for start in range(0, len(items), batch_size)
+    ]
+
+
+def _chunk_rows_by_item_budget(
+    cleaned_rows: list[dict[str, Any]],
+    *,
+    count_key: str,
+    batch_size: int,
+    allow_row_split: bool = False,
+) -> list[list[dict[str, Any]]]:
+    """Group rows into chunks bounded by **both** item count and row count.
+
+    Two budgets, because either alone leaves an unbounded statement:
+
+    * **Items** — the individual nodes or relationships written. This is the unit
+      that matters, and summing ``len(row[count_key])`` is what bounds it.
+    * **Rows** — the subjects. A row whose item list is empty contributes zero
+      items yet still costs a ``MATCH``, so an item-only budget lets an unbounded
+      number of empty rows land in one statement. An empty item list is a
+      legitimate payload (it is how "this subject now has none" is expressed), so
+      the row budget is what keeps that case bounded.
+
+    With ``allow_row_split``, a single row carrying more than ``batch_size`` items
+    is divided rather than shipped whole; see :func:`_split_row_by_item_budget`
+    for when that is sound. Without it, such a row is emitted as its own chunk and
+    is deliberately over budget — the caller has asked for row atomicity, and
+    silently splitting would break the semantics it asked for.
+    """
+    rows: list[dict[str, Any]] = []
+    for row in cleaned_rows:
+        if allow_row_split:
+            rows.extend(
+                _split_row_by_item_budget(row, count_key=count_key, batch_size=batch_size)
+            )
+        else:
+            rows.append(row)
+
+    chunks: list[list[dict[str, Any]]] = []
+    current_chunk: list[dict[str, Any]] = []
+    current_item_count = 0
+    for row in rows:
+        row_item_count = len(row[count_key])
+        would_exceed_items = current_item_count + row_item_count > batch_size
+        would_exceed_rows = len(current_chunk) + 1 > batch_size
+        if (would_exceed_items or would_exceed_rows) and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = [row]
+            current_item_count = row_item_count
+        else:
+            current_chunk.append(row)
+            current_item_count += row_item_count
+    if current_chunk:
+        chunks.append(current_chunk)
+    return chunks
+
+
 def batched_cypher_execute(
     cleaned_rows: list[dict[str, Any]],
     query: str,
@@ -462,46 +540,77 @@ def batched_cypher_execute(
     verb: str = "Processing",
     label: str = "relationships",
     timer_enabled: bool = False,
-) -> None:
+    batch_size: int = GRAPH_DB_BATCH_SIZE,
+    allow_row_split: bool = False,
+    retry_tuning: dict[str, Any] | None = None,
+) -> list[list[Any]]:
+    """Execute one ``UNWIND $rows`` statement per bounded chunk of ``cleaned_rows``.
+
+    Args:
+        cleaned_rows: UNWIND rows, already validated by the caller. A row whose
+            ``count_key`` list is empty is passed through, not skipped — for a
+            replace-all statement that row is the request to clear.
+        query: Cypher taking a ``$rows`` parameter.
+        count_key: The row key whose list length counts as that row's item total.
+        verb: Progress/log verb, e.g. ``"Adding"``.
+        label: Progress/log noun, e.g. ``"Asset-to-Point"``.
+        timer_enabled: Log start/elapsed for the whole call.
+        batch_size: Per-chunk budget, applied to items **and** rows.
+        allow_row_split: Divide a single over-budget row instead of shipping it
+            whole. Sound only for idempotent payloads — see
+            :func:`_split_row_by_item_budget`.
+        retry_tuning: Keyword arguments forwarded to
+            :func:`retry_neo4j_cluster_operation` (``max_attempts``,
+            ``retry_delay_seconds``, ``backoff_multiplier``,
+            ``max_retry_delay_seconds``). Omitting it uses that function's own
+            defaults, which are bound at *definition* time — so a caller that
+            configures retry behaviour by other means must pass it here for the
+            configuration to reach the retry loop.
+
+    Returns:
+        The result rows of every chunk, concatenated in execution order. Empty
+        when there was nothing to execute. Returning them is what lets a caller
+        confirm a write by what the graph reported rather than by the payload it
+        submitted; a statement with no ``RETURN`` simply contributes nothing.
+    """
     if not cleaned_rows:
-        return
-    total = sum(len(row[count_key]) for row in cleaned_rows)
+        return []
     batch_description = f'{verb} {label}'
+    forwarded_retry_tuning: dict[str, Any] = dict(retry_tuning or {})
+    results: list[list[Any]] = []
 
     def _execute_cypher(rows: list[dict[str, Any]]) -> None:
-        retry_neo4j_cluster_operation(
+        chunk_results, _meta = retry_neo4j_cluster_operation(
             lambda: db.cypher_query(query, {'rows': rows}),
             description=batch_description,
             reconnect=reconnect_neo4j_driver,
+            **forwarded_retry_tuning,
         )
+        if chunk_results:
+            results.extend(chunk_results)
 
-    if total <= GRAPH_DB_BATCH_SIZE:
+    batch_chunks = _chunk_rows_by_item_budget(
+        cleaned_rows,
+        count_key=count_key,
+        batch_size=batch_size,
+        allow_row_split=allow_row_split,
+    )
+
+    if len(batch_chunks) <= 1:
         if timer_enabled:
             log.info("graph_db.batch.start %s %s batched=False", verb, label)
             start_time: float = time.time()
-        _execute_cypher(cleaned_rows)
+        _execute_cypher(batch_chunks[0] if batch_chunks else cleaned_rows)
         if timer_enabled:
             elapsed_time: float = time.time() - start_time
             log.info("graph_db.batch.done %s elapsed=%s", label, elapsed_time)
     else:
         if timer_enabled:
             log.info("graph_db.batch.start %s %s batched=True", verb, label)
-        batch_chunks: list[list[dict[str, Any]]] = []
-        current_chunk: list[dict[str, Any]] = []
-        current_chunk_count = 0
-        for row in cleaned_rows:
-            row_count = len(row[count_key])
-            if current_chunk_count + row_count > GRAPH_DB_BATCH_SIZE and current_chunk:
-                batch_chunks.append(current_chunk)
-                current_chunk = [row]
-                current_chunk_count = row_count
-            else:
-                current_chunk.append(row)
-                current_chunk_count += row_count
-        if current_chunk:
-            batch_chunks.append(current_chunk)
         for chunk in tqdm(batch_chunks, desc=f"{verb} {label}", unit="batch"):
             _execute_cypher(chunk)
+
+    return results
 
 
 def connect_graph_db(graph_db_config: GraphDbConfig, *, install_labels_and_indexes: bool = False) -> None:
