@@ -18,6 +18,7 @@ from neomodel.sync_.database import db
 
 from agent_neo.graph_db import (
     GRAPH_DB_BATCH_SIZE,
+    batched_cypher_execute,
     reconnect_neo4j_driver,
     retry_neo4j_cluster_operation,
 )
@@ -218,24 +219,32 @@ def _bulk_upsert_nodes(product_cls: type, rows: list[dict[str, Any]], now_epoch_
         f'UNWIND $rows AS row '
         f'MERGE (n:`{label}` {{cache_key: row.cache_key}}) '
         f'SET n += row.properties, '
-        f'n.updated = $now, '
-        f'n.created = coalesce(n.created, $now), '
+        f'n.updated = row.now, '
+        f'n.created = coalesce(n.created, row.now), '
         f'n.needs_redo_since = null '
         f'RETURN n.cache_key AS cache_key, elementId(n) AS element_id'
     )
-    element_ids_by_cache_key: dict[str, str] = {}
-    for batch in _batched(rows, GRAPH_DB_BATCH_SIZE):
-        def _run() -> list[list[Any]]:
-            result_rows, _ = db.cypher_query(query, {'rows': batch, 'now': now_epoch_seconds})
-            return result_rows
-
-        for cache_key, element_id in retry_neo4j_cluster_operation(
-            _run,
-            description=f'bulk upsert {label} computed instances',
-            reconnect=reconnect_neo4j_driver,
-        ):
-            element_ids_by_cache_key[str(cache_key)] = str(element_id)
-    return element_ids_by_cache_key
+    # One row is one node, so the flat-row path (``count_key=None``) applies: it
+    # divides these into chunks of exactly GRAPH_DB_BATCH_SIZE, the same division
+    # the hand-rolled loop this replaces produced. Not faster — the point is that
+    # the retry wrapper, the reconnect and the results accumulation now come from
+    # the one helper instead of from a copy of it here.
+    #
+    # ``now`` rides on each row because the helper binds only ``$rows``. Keeping it
+    # a parameter rather than interpolating the literal keeps the query text
+    # constant from call to call, so the server's plan cache still hits.
+    returned_rows: list[list[Any]] = batched_cypher_execute(
+        [{**row, 'now': now_epoch_seconds} for row in rows],
+        query,
+        count_key=None,
+        verb='bulk upsert',
+        label=f'{label} computed instances',
+        batch_size=GRAPH_DB_BATCH_SIZE,
+    )
+    return {
+        str(cache_key): str(element_id)
+        for cache_key, element_id in returned_rows
+    }
 
 
 def _relationship_rows(
