@@ -641,7 +641,43 @@ def load_query(cypher_file_path: Path) -> GraphDbQueryAndReturnHeaderList:
     return GraphDbQueryAndReturnHeaderList(query=query_text, return_headers=return_headers)
 
 
+def _strip_cypher_comments(text: str) -> str:
+    """Remove ``/* */`` blocks and ``//`` line comments from Cypher text.
+
+    Split out of :func:`_parse_return_headers` so the strip can run BEFORE the
+    clause-terminator search rather than after it; see that function for why the
+    order is load-bearing.
+    """
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
+    return '\n'.join(
+        line[:line.index('//')] if '//' in line else line
+        for line in text.split('\n')
+    )
+
+
 def _parse_return_headers(query_text: str) -> list[str]:
+    """Read the column aliases a query's final RETURN clause produces.
+
+    **Comments are stripped before anything else is looked for, and that order is
+    the whole correctness of this function.** Until 2026-09 the strip ran last --
+    after the RETURN had been located, and after the section had been truncated at
+    ORDER BY / LIMIT -- which produced three silent failures:
+
+    * A ``//`` comment INSIDE the RETURN clause mentioning ``LIMIT`` or
+      ``ORDER BY`` truncated the clause at that comment, so every column after it
+      vanished. Per-column comments are a natural way to document a projection, so
+      this was reachable by writing the obvious thing.
+    * A ``//`` comment BELOW the query containing the bare word ``RETURN`` won,
+      because the LAST match is the one taken -- so a trailing note that happened
+      to say RETURN silently redefined the columns.
+    * A ``//`` inside a string literal in a RETURN column truncated that column and
+      lost its alias.
+
+    All three returned a plausible, shorter column list rather than raising, and a
+    wrong header list surfaces much later as a lookup for a column the caller was
+    told does not exist.
+    """
+    query_text = _strip_cypher_comments(query_text)
     return_matches = list(re.finditer(r'\bRETURN\b', query_text, re.IGNORECASE))
     if not return_matches:
         raise ValueError(
@@ -661,14 +697,6 @@ def _parse_return_headers(query_text: str) -> list[str]:
     if end_positions:
         return_section = return_section[:min(end_positions)]
     return_section = return_section.strip().rstrip(';')
-    return_section = re.sub(r'/\*.*?\*/', '', return_section, flags=re.DOTALL)
-    lines = return_section.split('\n')
-    cleaned_lines = []
-    for line in lines:
-        if '//' in line:
-            line = line[:line.index('//')]
-        cleaned_lines.append(line)
-    return_section = '\n'.join(cleaned_lines)
     columns = []
     current_column = []
     paren_depth = 0

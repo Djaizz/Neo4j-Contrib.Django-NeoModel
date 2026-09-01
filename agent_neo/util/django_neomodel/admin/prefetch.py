@@ -26,6 +26,7 @@ __all__: tuple[LiteralString, ...] = (
     "format_prefetched_count_display","format_prefetched_list_display",
     "format_prefetched_list_display_truncated","format_prefetched_scalar_display",
     "set_prefetch_attrs_from_entry","attach_prefetch_cache_to_filtered_queryset",
+    "PrefetchNotRunError",
 )
 
 
@@ -184,25 +185,89 @@ def safe_scalar_from_row(
     return None if v == '' else v
 
 
-def format_prefetched_list_display(
+class PrefetchNotRunError(RuntimeError):
+    """A display helper was asked for a prefetched value with no prefetch cache.
+
+    Distinguishes "the prefetch never ran" from "this node genuinely has no
+    value" — two states these helpers collapsed into one until 2026-09, both
+    rendering as the default. See :func:`_read_prefetched` for why that mattered.
+    """
+
+
+def _read_prefetched(
     obj: Any,
     admin_or_viewset: DjangoNeoModelAdmin | ReadOnlyModelViewSet,
     node_key: Any,
     attr_name: str,
     cache_entry_key: str,
     *,
+    strict: bool,
+    missing: Any,
+) -> Any:
+    """Read a prefetched value: node attribute first, then the prefetch cache.
+
+    **The one place the cache is read, and the one place `strict` is honoured.**
+
+    Every caller of these helpers used to do ``getattr(admin_or_viewset,
+    '_prefetch_cache', {})``, which silently produced ``{}`` when the prefetch had
+    not run at all — so "the prefetch never ran" and "this node has no value" were
+    indistinguishable, and both rendered as the default. The count variant was the
+    worst of the four: it returned ``0``, which is a perfectly plausible business
+    answer.
+
+    That is reachable more often than it looks: the search path, an empty queryset
+    (``run_prefetch`` short-circuits before creating the cache), a freshly
+    instantiated object, a renamed ``cache_entry_key``, or a transposed
+    ``attr_name``/``cache_entry_key`` pair — all of which are silent.
+
+    With ``strict=True`` a missing cache raises :class:`PrefetchNotRunError`
+    instead. The default stays ``False`` so existing callers keep their behaviour;
+    a caller that would rather know opts in.
+    """
+    value = getattr(obj, attr_name, None)
+    if value is not None:
+        return value
+    if not hasattr(admin_or_viewset, '_prefetch_cache'):
+        if strict:
+            raise PrefetchNotRunError(
+                f'{type(admin_or_viewset).__name__} has no _prefetch_cache, so '
+                f'{cache_entry_key!r} for node {node_key!r} cannot be read. The '
+                'prefetch did not run for this queryset — that is a different '
+                'thing from the value being absent, and strict=True asked to be '
+                'told which. Call run_prefetch() before rendering, or pass '
+                'strict=False to accept the default.'
+            )
+        return missing
+    cache = getattr(admin_or_viewset, '_prefetch_cache')
+    return cache.get(node_key, {}).get(cache_entry_key, missing)
+
+
+def format_prefetched_list_display(
+    obj: Any,
+    /,
+    *,
+    admin_or_viewset: DjangoNeoModelAdmin | ReadOnlyModelViewSet,
+    node_key: Any,
+    attr_name: str,
+    cache_entry_key: str,
     default: str = '-',
     sep: str = '   |   ',
+    strict: bool = False,
 ) -> str:
-    """Format a prefetched list for Django Admin list_display (obj → cache fallback, join or default).
+    """Format a prefetched list for Django Admin list_display.
 
-    Use in list_display methods that show a list of URIs/names from prefetch. Reads from
-    obj._prefetched_<attr_name> first, then from admin/viewset._prefetch_cache[node_key][cache_entry_key].
+    Reads ``obj._prefetched_<attr_name>`` first, then
+    ``admin_or_viewset._prefetch_cache[node_key][cache_entry_key]``.
+
+    Everything after ``obj`` is **keyword-only**. ``attr_name`` and
+    ``cache_entry_key`` are adjacent same-typed strings whose transposition used
+    to fail silently to the default, which is exactly the hazard a positional
+    signature cannot rule out.
     """
-    values = getattr(obj, attr_name, None)
-    if values is None:
-        cache = getattr(admin_or_viewset, '_prefetch_cache', {})
-        values = cache.get(node_key, {}).get(cache_entry_key, [])
+    values = _read_prefetched(
+        obj, admin_or_viewset, node_key, attr_name, cache_entry_key,
+        strict=strict, missing=[],
+    )
     if not isinstance(values, list):
         raise TypeError(f"Expected {cache_entry_key} to be a list, got {type(values).__name__}: {values}")
     if not values:
@@ -212,18 +277,24 @@ def format_prefetched_list_display(
 
 def format_prefetched_scalar_display(
     obj: Any,
+    /,
+    *,
     admin_or_viewset: DjangoNeoModelAdmin | ReadOnlyModelViewSet,
     node_key: Any,
     attr_name: str,
     cache_entry_key: str,
-    *,
     default: str = '-',
+    strict: bool = False,
 ) -> str:
-    """Format a prefetched scalar for Django Admin list_display (obj → cache fallback, or default)."""
-    value = getattr(obj, attr_name, None)
-    if value is None:
-        cache = getattr(admin_or_viewset, '_prefetch_cache', {})
-        value = cache.get(node_key, {}).get(cache_entry_key)
+    """Format a prefetched scalar for Django Admin list_display.
+
+    Everything after ``obj`` is keyword-only — see
+    :func:`format_prefetched_list_display` for why.
+    """
+    value = _read_prefetched(
+        obj, admin_or_viewset, node_key, attr_name, cache_entry_key,
+        strict=strict, missing=None,
+    )
     if not value or value == '':
         return default
     return value
@@ -231,21 +302,23 @@ def format_prefetched_scalar_display(
 
 def format_prefetched_list_display_truncated(
     obj: Any,
+    /,
+    *,
     admin_or_viewset: DjangoNeoModelAdmin | ReadOnlyModelViewSet,
     node_key: Any,
     attr_name: str,
     cache_entry_key: str,
-    *,
     default: str = '-',
     sep: str = '   |   ',
     max_items: int = 5,
     overflow_suffix: str = ' sessions',
+    strict: bool = False,
 ) -> str:
     """Format a prefetched list for list_display, showing up to max_items or 'N overflow_suffix'."""
-    values = getattr(obj, attr_name, None)
-    if values is None:
-        cache = getattr(admin_or_viewset, '_prefetch_cache', {})
-        values = cache.get(node_key, {}).get(cache_entry_key, [])
+    values = _read_prefetched(
+        obj, admin_or_viewset, node_key, attr_name, cache_entry_key,
+        strict=strict, missing=[],
+    )
     if not isinstance(values, list):
         raise TypeError(
             f"Expected {cache_entry_key} to be a list, got {type(values).__name__}: {values}"
@@ -259,16 +332,24 @@ def format_prefetched_list_display_truncated(
 
 def format_prefetched_count_display(
     obj: Any,
+    /,
+    *,
     admin_or_viewset: DjangoNeoModelAdmin | ReadOnlyModelViewSet,
     node_key: Any,
     attr_name: str,
     cache_entry_key: str,
+    strict: bool = False,
 ) -> int:
-    """Return the length of a prefetched list for Django Admin list_display (obj → cache fallback)."""
-    values = getattr(obj, attr_name, None)
-    if values is None:
-        cache = getattr(admin_or_viewset, '_prefetch_cache', {})
-        values = cache.get(node_key, {}).get(cache_entry_key, [])
+    """Return the length of a prefetched list for Django Admin list_display.
+
+    ``strict`` matters most here. With no prefetch cache this returns ``0``, and
+    "zero related items" is a plausible answer rather than an obviously broken
+    one — so of the four helpers this is the one whose silence is hardest to spot.
+    """
+    values = _read_prefetched(
+        obj, admin_or_viewset, node_key, attr_name, cache_entry_key,
+        strict=strict, missing=[],
+    )
     if not isinstance(values, list):
         raise TypeError(
             f"Expected {cache_entry_key} to be a list, got {type(values).__name__}: {values}"
