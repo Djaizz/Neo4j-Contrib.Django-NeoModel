@@ -1,2 +1,8 @@
-neomodel~=5.3.0
-django~=4.2.8
+# Runtime requirements mirror pyproject.toml [project].dependencies, which is
+# authoritative (CI installs `.[dev]` from pyproject; nothing consumes this file
+# mechanically). Kept in step 2026-09-09 alongside the neomodel 7.0.0 absorb:
+# the neomodel~=5.3.0 / django~=4.2.8 pins here had drifted three majors behind.
+neomodel @ git+https://github.com/djaizz/neo4j-contrib.neomodel
+django >= 6.0
+pandas >= 2.0
+tqdm >= 4.0

@@ -1,5 +1,6 @@
 from django.contrib import admin as dj_admin
-from django_neomodel import admin as neo_admin
+from django.contrib.admin import register
+from django_neomodel.admin import DjangoNeoModelAdmin
 from .models import Library, Book, Shelf
 
 
@@ -11,11 +12,11 @@ class LibraryAdmin(dj_admin.ModelAdmin):
 dj_admin.site.register(Library, LibraryAdmin)
 
 
-class BookAdmin(dj_admin.ModelAdmin):
+@register(Book)
+class BookAdmin(DjangoNeoModelAdmin):
     list_display = ("title", "created")
-neo_admin.register(Book, BookAdmin)
 
 
-class ShelfAdmin(dj_admin.ModelAdmin):
+@register(Shelf)
+class ShelfAdmin(DjangoNeoModelAdmin):
     list_display = ("name",)
-neo_admin.register(Shelf, ShelfAdmin)
