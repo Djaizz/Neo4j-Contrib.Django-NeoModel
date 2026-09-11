@@ -46,7 +46,7 @@ def test_split_row_divides_an_over_budget_row_and_copies_other_keys() -> None:
 
 
 # ============================================================================
-# _chunk_rows_by_item_budget — the item budget (HFCODB-0003 D1: items, not rows)
+# _chunk_rows_by_item_budget — the budget counts items, not rows
 # ============================================================================
 
 def test_chunks_are_bounded_by_item_count() -> None:
@@ -87,7 +87,7 @@ def test_allow_row_split_divides_an_over_budget_row() -> None:
 def test_rows_with_empty_item_lists_are_kept_not_skipped() -> None:
     """An empty item list is how "this subject now has none" is expressed.
 
-    HFCODB-0002's verb vocabulary: ``set`` means replace with exactly this, and
+    The verb vocabulary: ``set`` means replace with exactly this, and
     the empty set is a legal target state that must clear rather than be ignored.
     """
     chunks = _chunk_rows_by_item_budget(

@@ -37,7 +37,7 @@ def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
         local_period_start=datetime(2026, 5, 1),
         local_period_end=datetime(2026, 6, 1),
         day_classif='weekday',
-        hour_classif='facility_operating',
+        hour_classif='operating',
     )
     indexed_instances = prefetch_daily_instances_by_cache_key(
         ensure_instances=ensure_instances,
@@ -59,10 +59,10 @@ def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
 
 def test_collect_daily_dep_instances_for_monthly_identity_filters_missing() -> None:
     monthly_identity = AnalyticalProductIdentity(
-        computed_node_class_name='HVACEquipmentTemperatureComfort',
-        scope_name='nvidia-voyager',
-        subject_kind='hvac_equipment',
-        subject_key='AHU-1',
+        computed_node_class_name='ExampleTemperatureMetricSet',
+        scope_name='example-scope',
+        subject_kind='equipment',
+        subject_key='equipment-1',
         temporal_granularity=TemporalGranularity.MONTHLY,
         local_period_start=datetime(2026, 5, 1),
         local_period_end=datetime(2026, 5, 4),

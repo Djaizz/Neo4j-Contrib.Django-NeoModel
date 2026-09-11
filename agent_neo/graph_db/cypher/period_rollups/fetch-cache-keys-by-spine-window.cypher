@@ -1,4 +1,4 @@
-// Existing rollup cache keys in a facility-local spine window.
+// Existing rollup cache keys in a scope-local spine window.
 // Parameters: facility_name, temporal_granularity, local_period_start_gte, local_period_start_lt
 MATCH (n:`__LABEL__`)
 WHERE n.facility_name = $facility_name

@@ -173,6 +173,10 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         label='Logical slot id',
         help_text='Deterministic over (scope, subject, temporal_granularity, window) — not over the concept.',
     )
+    # ``db_property='facility_name'`` is a legacy on-disk alias, not a domain
+    # assumption: the API surface is ``scope_name``. Renaming the stored property would
+    # require a coordinated Neo4j data migration on already-deployed graphs, so the
+    # alias stays until such a migration is scheduled. New code reads ``scope_name``.
     scope_name: Property = StringProperty(required=True, index=True, db_property='facility_name')
     subject_kind: Property = StringProperty(required=True, index=True)
     subject_key: Property = StringProperty(required=True, index=True)
@@ -492,7 +496,7 @@ def _set_period_datetime(
     *,
     local_tz: tzinfo,
 ) -> None:
-    """Persist facility-local period bounds in Neo4j-safe UTC (``DateTimeNeo4jFormatProperty``)."""
+    """Persist scope-local period bounds in Neo4j-safe UTC (``DateTimeNeo4jFormatProperty``)."""
     if hasattr(type(node), field_name) or hasattr(node, field_name):
         setattr(
             node,

@@ -122,7 +122,7 @@ def test_values_fall_back_to_the_cache_when_the_node_has_none() -> None:
 
 @pytest.mark.parametrize('helper', _HELPERS, ids=lambda h: h.__name__)
 def test_only_the_node_may_be_passed_positionally(helper) -> None:
-    """HFCODB-0024 D2: `attr_name` and `cache_entry_key` are adjacent same-typed
+    """`attr_name` and `cache_entry_key` are adjacent same-typed
     strings, and a transposition used to fail silently to the default. The
     signature is what rules that out."""
     with pytest.raises(TypeError):

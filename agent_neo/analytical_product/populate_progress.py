@@ -67,7 +67,7 @@ class _NullPeriodBar:
 
 
 class _RefreshingPeriodBar:
-    """Period bar wrapper that keeps the active meter bar visible underneath."""
+    """Period bar wrapper that keeps the active subject bar visible underneath."""
 
     def __init__(self, bar: Any, populate_progress: 'PopulateProgress') -> None:
         self._bar = bar
@@ -526,7 +526,7 @@ class PopulateProgress:
         unit: str = 'it',
         scope_desc: bool = False,
     ) -> Iterator[_PeriodBar]:
-        """Manual nested period bar (days/hours) under the meter bar.
+        """Manual nested period bar (days/hours) under the subject bar.
 
         Inner bars omit the scope prefix by default so nested lines stay short on Windows.
         """

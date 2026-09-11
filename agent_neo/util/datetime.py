@@ -84,7 +84,7 @@ def resolve_populate_date_range(
 ) -> tuple[date, date]:
     """Resolve inclusive calendar ``from_date`` .. ``to_date`` for populate-style jobs.
 
-    When ``to_date`` is omitted, uses facility-local today from ``tz`` if given, otherwise
+    When ``to_date`` is omitted, uses scope-local today from ``tz`` if given, otherwise
     approximates local civil time via ``local_tz_offset_hours`` added to UTC now.
     When ``from_date`` is omitted, defaults to ``to_date`` (single-day window).
     """
@@ -109,14 +109,14 @@ def local_datetime_range_for_inclusive_dates(
     *,
     tz: tzinfo,
 ) -> tuple[datetime, datetime]:
-    """Facility-local ``[start, end)`` datetimes covering inclusive calendar dates."""
+    """Scope-local ``[start, end)`` datetimes covering inclusive calendar dates."""
     local_start = datetime.combine(from_date, time.min, tzinfo=tz)
     local_end = datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=tz)
     return local_start, local_end
 
 
 def parse_local_datetime_from_iso(raw_period_start: str, *, tz: tzinfo) -> datetime:
-    """Parse ISO period start; attach ``tz`` when naive, else convert to facility local."""
+    """Parse ISO period start; attach ``tz`` when naive, else convert to scope local."""
     local_period_start = datetime.fromisoformat(raw_period_start)
     if local_period_start.tzinfo is None:
         return local_period_start.replace(tzinfo=tz)
@@ -154,16 +154,16 @@ def local_tz_identifier(local_tz: tzinfo) -> str:
     if isinstance(local_tz, ZoneInfo):
         return local_tz.key
     raise ValueError(
-        'facility timezone must be zoneinfo.ZoneInfo (IANA identifier from ontology)',
+        'scope timezone must be zoneinfo.ZoneInfo (IANA identifier from ontology)',
     )
 
 
 def coerce_to_local_tz(dt: datetime, local_tz: tzinfo, *, name: str = 'datetime') -> datetime:
-    """Convert to facility-local civil time with canonical ``local_tz``."""
-    facility_local_datetime = require_timezone_aware(dt, name=name).astimezone(local_tz)
-    normalized_time = facility_local_datetime.time().replace(microsecond=0)
+    """Convert to scope-local civil time with canonical ``local_tz``."""
+    scope_local_datetime = require_timezone_aware(dt, name=name).astimezone(local_tz)
+    normalized_time = scope_local_datetime.time().replace(microsecond=0)
     return datetime.combine(
-        facility_local_datetime.date(),
+        scope_local_datetime.date(),
         normalized_time,
         tzinfo=local_tz,
     )
@@ -175,7 +175,7 @@ def coerce_to_utc_for_neo4j_datetime(
     *,
     name: str = 'datetime',
 ) -> datetime:
-    """Facility-local instant as UTC for ```DateTimeNeo4jFormatProperty``` (Bolt dehydrate-safe)."""
+    """Scope-local instant as UTC for ```DateTimeNeo4jFormatProperty``` (Bolt dehydrate-safe)."""
     return coerce_to_local_tz(dt, local_tz, name=name).astimezone(UTC)
 
 
@@ -190,7 +190,7 @@ def prepare_hour_populate_window(
     *,
     tz: tzinfo,
 ) -> tuple[datetime, datetime]:
-    """Return hour-aligned facility-local ``[start, end)`` for hourly populate."""
+    """Return hour-aligned scope-local ``[start, end)`` for hourly populate."""
     local_start = normalize_to_hour_start(
         require_timezone_aware(from_datetime, name='from_datetime').astimezone(tz),
     )
@@ -258,19 +258,19 @@ def complete_calendar_month_windows_in_range(
     return windows
 
 
-def start_of_local_day(local_date: date, facility_timezone: tzinfo) -> datetime:
-    """Return facility-local midnight for ``local_date``."""
+def start_of_local_day(local_date: date, local_tz: tzinfo) -> datetime:
+    """Return scope-local midnight for ``local_date``."""
     return datetime(
         local_date.year,
         local_date.month,
         local_date.day,
-        tzinfo=facility_timezone,
+        tzinfo=local_tz,
     )
 
 
-def start_of_next_local_day(local_date: date, facility_timezone: tzinfo) -> datetime:
+def start_of_next_local_day(local_date: date, local_tz: tzinfo) -> datetime:
     """Return exclusive end boundary at start of the day after ``local_date``."""
-    return start_of_local_day(local_date, facility_timezone) + timedelta(days=1)
+    return start_of_local_day(local_date, local_tz) + timedelta(days=1)
 
 
 def coerce_to_date(value: date | datetime | str | None) -> date | None:
@@ -346,7 +346,7 @@ def period_windows_for_range(
     return period_windows
 
 
-def _facility_local_now(*, local_tz: tzinfo, now: datetime | None) -> datetime:
+def _scope_local_now(*, local_tz: tzinfo, now: datetime | None) -> datetime:
     if now is None:
         return datetime.now(tz=local_tz)
     return coerce_to_local_tz(now, local_tz, name='now')
@@ -407,7 +407,7 @@ def latest_eligible_exclusive_period_end(
     maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
 ) -> datetime:
     """Exclusive end of the latest finished local period eligible for ensure-on-read ``.get()``."""
-    local_now = _facility_local_now(local_tz=local_tz, now=now)
+    local_now = _scope_local_now(local_tz=local_tz, now=now)
     candidate_exclusive_end = _initial_exclusive_period_end(
         local_now=local_now,
         temporal_granularity=temporal_granularity,
@@ -429,7 +429,7 @@ def latest_eligible_inclusive_daily_date(
     now: datetime | None = None,
     maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
 ) -> date:
-    """Latest facility-local calendar day eligible for daily ensure-on-read ``.get()``."""
+    """Latest scope-local calendar day eligible for daily ensure-on-read ``.get()``."""
     local_to_exclusive = latest_eligible_exclusive_period_end(
         temporal_granularity=TemporalGranularity.DAILY,
         local_tz=local_tz,
@@ -468,7 +468,7 @@ def resolve_hourly_get_datetime_range(
     now: datetime | None = None,
     maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
 ) -> tuple[datetime, datetime]:
-    """Resolve facility-local ``[from, to)`` for hourly ensure-on-read ``.get()``."""
+    """Resolve scope-local ``[from, to)`` for hourly ensure-on-read ``.get()``."""
     eligible_to_exclusive = latest_eligible_exclusive_period_end(
         temporal_granularity=TemporalGranularity.HOURLY,
         local_tz=local_tz,
@@ -572,7 +572,7 @@ def resolve_window_for_temporal_granularity(
     now: datetime | None = None,
     maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
 ) -> tuple[datetime, datetime]:
-    """Resolve facility-local ``[from, to)`` for any temporal_granularity, clamping ``to`` to latest mature.
+    """Resolve scope-local ``[from, to)`` for any temporal_granularity, clamping ``to`` to latest mature.
 
     Granularity-agnostic generalization of compat electricity get-range helpers: the maturity
     clamp lives here and applies identically to every product family.

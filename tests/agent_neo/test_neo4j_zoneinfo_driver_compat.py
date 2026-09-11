@@ -20,8 +20,8 @@ from neo4j.time import DateTime as Neo4jDateTime
 from agent_neo.util.django_neomodel.models import coerce_to_fixed_offset_for_neo4j
 
 
-FACILITY_ZONE = ZoneInfo("Asia/Kolkata")
-FACILITY_LOCAL_DATETIME = datetime(2026, 5, 1, 9, 0, tzinfo=FACILITY_ZONE)
+SCOPE_ZONE = ZoneInfo("Asia/Kolkata")
+SCOPE_LOCAL_DATETIME = datetime(2026, 5, 1, 9, 0, tzinfo=SCOPE_ZONE)
 
 
 def _run_probe_subprocess(probe_code: str, *, timeout_seconds: float = 10.0) -> subprocess.CompletedProcess[str]:
@@ -42,7 +42,7 @@ def test_installed_neo4j_driver_version_is_recorded() -> None:
 
 @pytest.mark.unit
 def test_zoneinfo_utcoffset_accepts_python_datetime() -> None:
-    offset = FACILITY_LOCAL_DATETIME.utcoffset()
+    offset = SCOPE_LOCAL_DATETIME.utcoffset()
     assert offset is not None
     assert offset.total_seconds() == 5.5 * 3600
 
@@ -61,8 +61,8 @@ def test_upstream_zoneinfo_neo4j_datetime_still_segfaults_in_subprocess() -> Non
         from zoneinfo import ZoneInfo
         from neo4j.time import DateTime as Neo4jDateTime
 
-        facility_local_datetime = datetime(2026, 5, 1, 9, 0, tzinfo=ZoneInfo("Asia/Kolkata"))
-        native = Neo4jDateTime.from_native(facility_local_datetime)
+        scope_local_datetime = datetime(2026, 5, 1, 9, 0, tzinfo=ZoneInfo("Asia/Kolkata"))
+        native = Neo4jDateTime.from_native(scope_local_datetime)
         ZoneInfo("Asia/Kolkata").utcoffset(native)
         print("unexpected success")
         """
@@ -89,8 +89,8 @@ def test_from_native_zoneinfo_without_coercion_still_unsafe_in_subprocess() -> N
         from zoneinfo import ZoneInfo
         from neo4j.time import DateTime as Neo4jDateTime
 
-        facility_local_datetime = datetime(2026, 5, 1, 9, 0, tzinfo=ZoneInfo("Asia/Kolkata"))
-        converted = Neo4jDateTime.from_native(facility_local_datetime)
+        scope_local_datetime = datetime(2026, 5, 1, 9, 0, tzinfo=ZoneInfo("Asia/Kolkata"))
+        converted = Neo4jDateTime.from_native(scope_local_datetime)
         print(converted.utc_offset())
         """
     )
@@ -100,7 +100,7 @@ def test_from_native_zoneinfo_without_coercion_still_unsafe_in_subprocess() -> N
 
 @pytest.mark.unit
 def test_from_native_zoneinfo_with_coercion_is_stable() -> None:
-    coerced = coerce_to_fixed_offset_for_neo4j(FACILITY_LOCAL_DATETIME)
+    coerced = coerce_to_fixed_offset_for_neo4j(SCOPE_LOCAL_DATETIME)
     converted = Neo4jDateTime.from_native(coerced)
     assert converted.tzinfo is not None
     zone_key = getattr(coerced.tzinfo, "key", None)
@@ -111,6 +111,6 @@ def test_from_native_zoneinfo_with_coercion_is_stable() -> None:
 
 @pytest.mark.unit
 def test_coercion_preserves_instant_and_offset() -> None:
-    coerced = coerce_to_fixed_offset_for_neo4j(FACILITY_LOCAL_DATETIME)
-    assert coerced == FACILITY_LOCAL_DATETIME
-    assert coerced.utcoffset() == FACILITY_LOCAL_DATETIME.utcoffset()
+    coerced = coerce_to_fixed_offset_for_neo4j(SCOPE_LOCAL_DATETIME)
+    assert coerced == SCOPE_LOCAL_DATETIME
+    assert coerced.utcoffset() == SCOPE_LOCAL_DATETIME.utcoffset()

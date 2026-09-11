@@ -27,6 +27,8 @@ class PeriodSpineMixin:
         db_property='cache_key',
         max_length=PERIOD_SPINE_MAX_STRING_LENGTH,
     )
+    # ``db_property='facility_name'`` is a legacy on-disk alias kept for deployed-graph
+    # compatibility; the API surface is ``scope_name``. See ``abstract.py`` for the note.
     scope_name: Property = StringProperty(
         index=True,
         required=True,

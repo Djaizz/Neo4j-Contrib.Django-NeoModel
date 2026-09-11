@@ -393,7 +393,7 @@ def _local_tz(scope: AnalyticalProductScope) -> tzinfo:
         candidate = getattr(scope, attr, None)
         if isinstance(candidate, tzinfo):
             return candidate
-    raise AttributeError('AnalyticalProductScope does not expose a facility timezone (local_tz/tz/timezone)')
+    raise AttributeError('AnalyticalProductScope does not expose a scope timezone (local_tz/tz/timezone)')
 
 
 def _label(model_class: type) -> str:

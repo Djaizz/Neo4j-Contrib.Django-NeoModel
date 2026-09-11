@@ -14,8 +14,8 @@ __all__ = ("AnalyticalProductScope",)
 class AnalyticalProductScope(Protocol):
     """Minimal scope surface for analytical-product computation.
 
-    Carries the facility/scope identifier (``scope_name``) and the
-    facility-local timezone (``local_tz``, aliased as ``tz``).
+    Carries the scope identifier (``scope_name``) and the
+    scope-local timezone (``local_tz``, aliased as ``tz``).
     """
 
     scope_name: str
