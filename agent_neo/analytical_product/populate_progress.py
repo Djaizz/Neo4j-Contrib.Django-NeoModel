@@ -76,16 +76,16 @@ class _RefreshingPeriodBar:
     def update(self, increment: int = 1) -> None:
         self._bar.update(increment)
         self._bar.refresh()
-        self._populate_progress._refresh_active_meter_bar()
+        self._populate_progress._refresh_active_subject_bar()
 
     def set_postfix_str(self, postfix: str, *, refresh: bool = True) -> None:
         self._bar.set_postfix_str(postfix, refresh=refresh)
         self._bar.refresh()
-        self._populate_progress._refresh_active_meter_bar()
+        self._populate_progress._refresh_active_subject_bar()
 
     def set_description(self, description: str) -> None:
         self._bar.set_description(description)
-        self._populate_progress._refresh_active_meter_bar()
+        self._populate_progress._refresh_active_subject_bar()
 
 
 def _ensure_tqdm_terminal_ready() -> None:
@@ -320,11 +320,11 @@ class PopulateProgress:
         self._cache_collision_counts: dict[str, int] = {}
         self._step_once_keys: set[str] = set()
         self._tqdm_depth: int = 0
-        self._active_meter_bar: Any | None = None
+        self._active_subject_bar: Any | None = None
 
-    def _refresh_active_meter_bar(self) -> None:
-        if self._active_meter_bar is not None:
-            self._active_meter_bar.refresh()
+    def _refresh_active_subject_bar(self) -> None:
+        if self._active_subject_bar is not None:
+            self._active_subject_bar.refresh()
 
     @property
     def use_tqdm(self) -> bool:
@@ -536,7 +536,7 @@ class PopulateProgress:
             yield _NullPeriodBar()
             return
 
-        position = 1 if self._active_meter_bar is not None else self._tqdm_depth
+        position = 1 if self._active_subject_bar is not None else self._tqdm_depth
         self._tqdm_depth += 1
         bar = _comma_separated_tqdm(
             total=total,
@@ -550,7 +550,7 @@ class PopulateProgress:
         finally:
             bar.close()
             self._tqdm_depth -= 1
-            self._refresh_active_meter_bar()
+            self._refresh_active_subject_bar()
 
     def iterate(
         self,

@@ -18,6 +18,7 @@ from agent_neo.graph_db import (
 from agent_neo.graph_db.cypher_templates import (
     COUNT_NODES_BY_PROPERTY_IN_KEYS,
     COUNT_ROLLUPS_IN_WINDOW,
+    DELETE_ROLLUPS_IN_WINDOW,
 )
 from agent_neo.graph_db.query_bind import LABEL_PLACEHOLDER, WHERE_PLACEHOLDER
 
@@ -25,6 +26,7 @@ from agent_neo.graph_db.query_bind import LABEL_PLACEHOLDER, WHERE_PLACEHOLDER
 def test_cypher_templates_load_non_empty() -> None:
     assert COUNT_NODES_BY_PROPERTY_IN_KEYS
     assert COUNT_ROLLUPS_IN_WINDOW
+    assert DELETE_ROLLUPS_IN_WINDOW
     assert 'RETURN' in str(FETCH_CACHE_KEYS_BY_SPINE_WINDOW.query)
     assert 'UNWIND $rows AS row' in MERGE_ROWS_BY_CACHE_KEY
 
@@ -34,6 +36,8 @@ def test_bind_label_substitutes_placeholder() -> None:
     assert LABEL_PLACEHOLDER not in query
     assert 'Test_PeriodRollup' in query
     assert 'RETURN n.cache_key AS cache_key' in query
+    assert 'n.facility_name = $scope_name' in query
+    assert '$facility_name' not in query
 
 
 def test_bind_label_and_property_for_cache_key_delete() -> None:
@@ -51,6 +55,16 @@ def test_fetch_rows_by_cache_keys_template() -> None:
     assert 'Test_PeriodRollup' in query
     assert 'cache_key IN $keys' in query
     assert 'node_properties' in query
+
+
+def test_spine_window_templates_bind_scope_name() -> None:
+    """Legacy on-disk property stays facility_name; bind params use scope_name."""
+    count_query = bind_label(COUNT_ROLLUPS_IN_WINDOW, 'Test_PeriodRollup')
+    delete_query = bind_label(DELETE_ROLLUPS_IN_WINDOW, 'Test_PeriodRollup')
+    preload_query = bind_label(PRELOAD_PERIOD_ROLLUPS_BY_SPINE_WINDOW, 'Test_PeriodRollup')
+    for query in (count_query, delete_query, preload_query):
+        assert 'n.facility_name = $scope_name' in query
+        assert '$facility_name' not in query
 
 
 def test_preload_period_rollups_by_spine_window_template() -> None:

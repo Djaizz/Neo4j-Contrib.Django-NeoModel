@@ -150,11 +150,11 @@ def epoch_seconds(moment: datetime | None = None) -> float:
 
 
 def local_tz_identifier(local_tz: tzinfo) -> str:
-    """Return the IANA timezone name used in hourly consumption external keys."""
+    """Return the IANA timezone name used in scope-local external keys."""
     if isinstance(local_tz, ZoneInfo):
         return local_tz.key
     raise ValueError(
-        'scope timezone must be zoneinfo.ZoneInfo (IANA identifier from ontology)',
+        'scope timezone must be zoneinfo.ZoneInfo (IANA identifier)',
     )
 
 
@@ -574,8 +574,8 @@ def resolve_window_for_temporal_granularity(
 ) -> tuple[datetime, datetime]:
     """Resolve scope-local ``[from, to)`` for any temporal_granularity, clamping ``to`` to latest mature.
 
-    Granularity-agnostic generalization of compat electricity get-range helpers: the maturity
-    clamp lives here and applies identically to every product family.
+    Granularity-agnostic get-range helper: the maturity clamp lives here and applies
+    identically to every product family.
     """
     if temporal_granularity == TemporalGranularity.MONTHLY:
         from_month = None if from_bound is None else _month_string_from_bound(from_bound)

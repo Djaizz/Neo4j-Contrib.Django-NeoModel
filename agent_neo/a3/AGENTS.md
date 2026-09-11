@@ -34,8 +34,8 @@ It still drifted, within weeks:
 - three `…MetricSet`-suffixed facades still accept a `force_redo` argument that a
   verified requirement prohibits — and silently discard it (one does `del force_redo`)
 - a spatial-temporal rollup helper mechanically generates the full operator cross
-  product — 121 field rules including `kwh_p95OverSpace_p95OverTime` and
-  `kwh_avgOverSpace_avgOverTime`, neither of which denotes anything
+  product — 121 field rules including `qty_p95OverSpace_p95OverTime` and
+  `qty_avgOverSpace_avgOverTime`, neither of which denotes anything
 
 None of that is carelessness. It is evidence about the medium:
 
@@ -88,7 +88,7 @@ package. The eleven modules that *do* bind — `abstract.py`,
 interpreter.
 
 A3's first increment is therefore mostly **naming a split that already exists**,
-not inventing one. The same move was already run one level down when BMS
+not inventing one. The same move was already run one level down when domain
 vocabulary was extracted out of `agent_neo` into its domain package.
 
 ## What makes it *agentic*
@@ -100,9 +100,9 @@ and they are why the layer deserves its own name:
    human reads a style guide and applies judgment. An agent needs a checker. Any
    governance rule that cannot execute will drift.
 
-2. **The authority split must be encoded, not stated.** "The Ontologist agent may
-   evolve the Analytical component; the Administrator retains control of
-   Structural and IoT" is the most important governance primitive in the harness
+2. **The authority split must be encoded, not stated.** "Domain packages may
+   evolve analytical vocabulary; the platform retains control of structural and
+   ingestion layers" is the most important governance primitive in the harness
    — and it is currently a sentence in a markdown file. It was already violated
    (a structural module importing a private analytical one). A3 should express
    authority boundaries as something enforceable: import-graph rules, capability
@@ -188,13 +188,13 @@ Two consequences worth stating plainly:
   over a partition.
 
 A third consequence is predictive rather than corrective. A linear `map` commutes
-with `roll`, which is *why* cost, CO₂ and EUI could be unified into one
-derivative class — discovered empirically in the reference implementation, but
-The same law says which derivatives cannot unify that way (anything non-linear
-must be computed after the fold), and it surfaces a live side condition: cost =
-kWh × tariff is linear **only while the tariff is constant over the roll window**.
-Time-of-use pricing breaks it, and nothing in a registry of bare callables would
-notice.
+with `roll`, which is *why* several quantity×rate derivatives could be unified
+into one class — discovered empirically in the reference implementation, but
+the same law says which derivatives cannot unify that way (anything non-linear
+must be computed after the fold), and it surfaces a live side condition: a
+linear `qty × rate` map holds **only while the rate is constant over the roll
+window**. Time-varying rates break it, and nothing in a registry of bare
+callables would notice.
 
 ## Intended shape (not yet built)
 
@@ -233,29 +233,29 @@ language. Those need the carrier settled first (see Open questions).
 A3 covers the derivation stack from source observations up through metrics, and
 the derivation of views from metrics. It stops at three walls, on purpose:
 
-- **Judgment is not algebraic.** "That room was a bit warm yesterday" is a
-  threshold policy — facility-configured, occasionally political, changeable
-  without any underlying fact changing. It can be modelled as a morphism to a
-  label lattice, but there are no useful rewrite laws, so there is nothing to
-  optimize. The reference implementation reflects this: **29 MetricSet classes
-  against 1 InterpretationSet.** That asymmetry is the honest boundary, not a gap.
+- **Judgment is not algebraic.** "That reading looks off" is a threshold policy —
+  scope-configured, occasionally political, changeable without any underlying
+  fact changing. It can be modelled as a morphism to a label lattice, but there
+  are no useful rewrite laws, so there is nothing to optimize. The reference
+  implementation reflects this: **many MetricSet classes against few judgment
+  facades.** That asymmetry is the honest boundary, not a gap.
 - **Presentation is a different formalism.** Charts, tables, tabs, row/column
   semantics belong to a grammar of graphics. Unifying it with an aggregation
   algebra would be a category error.
-- **Domain vocabulary stays in the domain.** Facility-local time, a 30-minute
-  telemetry maturity buffer, working-hours/weekend/holiday classification, and
-  Site/Building/Floor/Zone topology are BMS concerns. Their *shapes* generalize —
+- **Domain vocabulary stays in the domain.** Scope-local time, a maturity buffer,
+  classification dimensions (weekday vs weekend, operating vs idle), and a
+  multi-level scope lattice are domain concerns. Their *shapes* generalize —
   a domain-local time basis, a maturity lag parameter per granularity,
   classification dimensions as part of identity, a scope lattice with partition
   side conditions. Parametrize those; never hard-code the values.
 
 One boundary is a feature rather than a limitation. Real scope hierarchies are
 not lattices — the source domain's own draft requirement concedes that not every
-building has well-defined floors. So `roll` over scope carries a **partition side
-condition**: aggregating to a parent is meaningful only if the children partition
-it, with no gaps and no double-counting. A3 should make coverage a first-class,
-propagated property. Current practice sums whatever children were found, which is
-exactly how sub-metering gaps become silent undercounts.
+parent has a clean child partition. So `roll` over scope carries a **partition
+side condition**: aggregating to a parent is meaningful only if the children
+partition it, with no gaps and no double-counting. A3 should make coverage a
+first-class, propagated property. Current practice sums whatever children were
+found, which is exactly how coverage gaps become silent undercounts.
 
 ## Invariants (binding once code lands)
 

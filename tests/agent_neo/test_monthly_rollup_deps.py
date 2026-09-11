@@ -31,8 +31,8 @@ def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
         ]
 
     parent_request = AnalyticalProductRequest(
-        subject_kind='building',
-        subject_key='9A',
+        subject_kind='group',
+        subject_key='s1',
         temporal_granularity=TemporalGranularity.MONTHLY,
         local_period_start=datetime(2026, 5, 1),
         local_period_end=datetime(2026, 6, 1),
@@ -47,10 +47,10 @@ def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
     assert len(received_requests) == 1
     daily_request = received_requests[0]
     assert daily_request.temporal_granularity == TemporalGranularity.DAILY
-    assert daily_request.subject_kind == 'building'
-    assert daily_request.subject_key == '9A'
+    assert daily_request.subject_kind == 'group'
+    assert daily_request.subject_key == 's1'
     assert daily_request.day_classif == 'weekday'
-    assert daily_request.hour_classif == 'facility_operating'
+    assert daily_request.hour_classif == 'operating'
     assert indexed_instances == {
         'daily-a': _StubInstance(cache_key='daily-a'),
         'daily-b': _StubInstance(cache_key='daily-b'),
@@ -59,16 +59,16 @@ def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
 
 def test_collect_daily_dep_instances_for_monthly_identity_filters_missing() -> None:
     monthly_identity = AnalyticalProductIdentity(
-        computed_node_class_name='ExampleTemperatureMetricSet',
+        analytical_product_class_name='ExampleMetricSet',
         scope_name='example-scope',
-        subject_kind='equipment',
-        subject_key='equipment-1',
+        subject_kind='item',
+        subject_key='item-1',
         temporal_granularity=TemporalGranularity.MONTHLY,
         local_period_start=datetime(2026, 5, 1),
         local_period_end=datetime(2026, 5, 4),
     )
     may_first_identity = AnalyticalProductIdentity(
-        computed_node_class_name=monthly_identity.computed_node_class_name,
+        analytical_product_class_name=monthly_identity.analytical_product_class_name,
         scope_name=monthly_identity.scope_name,
         subject_kind=monthly_identity.subject_kind,
         subject_key=monthly_identity.subject_key,
@@ -77,7 +77,7 @@ def test_collect_daily_dep_instances_for_monthly_identity_filters_missing() -> N
         local_period_end=datetime(2026, 5, 2),
     )
     may_third_identity = AnalyticalProductIdentity(
-        computed_node_class_name=monthly_identity.computed_node_class_name,
+        analytical_product_class_name=monthly_identity.analytical_product_class_name,
         scope_name=monthly_identity.scope_name,
         subject_kind=monthly_identity.subject_kind,
         subject_key=monthly_identity.subject_key,
