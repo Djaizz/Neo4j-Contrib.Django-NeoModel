@@ -2,11 +2,15 @@
 
 ## ADMINISTRATOR'S NOTES
 
-### Status: charter, not yet implementation
+### Status: charter + playground sketch
 
-This document records **why this layer should exist and what belongs in it**. No
-A3 code has been written yet. Everything under "Intended shape" is intent, not
-inventory — verify against the directory before relying on any module named here.
+This document records **why this layer should exist and what belongs in it**.
+Everything under "Intended shape" is still intent, not a shipped engine.
+
+**Playground sketch** (typed stubs, storage-agnostic): see [`SKETCH.md`](SKETCH.md)
+and the sibling modules `carrier.py`, `operators.py`, `product.py`, `ops.py`,
+`laws.py`. Names and contracts only — no Neo4j/Django wiring, no bind into
+`analytical_product` yet.
 
 ### Design aspiration
 
