@@ -28,13 +28,14 @@ storage-agnostic and `django_neomodel` is a Django ↔ Neo4j bridge. The
 
 ## Why this layer exists
 
-The reference implementation A3 is factored from is a production analytical layer
-**authored and evolved by an agent** under a written governance harness: 32
-requirement files (30 administrator-verified, 2 draft), eleven design elements
-with a necessity/sufficiency proof, a health assessment, and a divergence
-register. It is unusually well-specified work.
+A3 is inspired by a first, still-unfinished attempt to build an
+**agent-authored, agent-evolvable** analytical layer: written governance harness,
+requirement files, design proofs, health checks — the scaffolding of a serious
+try. That exercise is a construction site, not a finished building. Scaffolding
+went up (dozens of requirements, design elements, a divergence register); the
+structure is incomplete, uneven, and already showing stress.
 
-It still drifted, within weeks:
+It drifted under that prose governance within weeks:
 
 - the necessity/sufficiency proof covers 28 requirements; there are 32
 - the problem-pattern coherence check links to a health assessment file that no
@@ -45,23 +46,28 @@ It still drifted, within weeks:
   product — 121 field rules including `qty_p95OverSpace_p95OverTime` and
   `qty_avgOverSpace_avgOverTime`, neither of which denotes anything
 
-None of that is carelessness. It is evidence about the medium:
+None of that is a verdict on the attempt. It is evidence about the medium:
 
 > **Governance-by-document is what you do when you cannot govern by construction.
 > Prose governance decays at agent speed.**
 
-Look at the requirements through that lens and they sort into three kinds. Some
-are **laws** that could execute and don't. Some are **judgments** that genuinely
-cannot be derived. And some are **prohibitions standing in for missing
-abstractions** — `ANALYTICAL-NO-FORCE-REDO-ARGS` forbids a knob because
-invalidation cannot be computed; the mandated two-phase rollup order is policy
-because the operator laws are unstated; `ANALYTICAL-CODE-GEN`'s canonical forms
-and six named anti-patterns exist because agents author by imitation rather than
-by construction.
+The attempt is what motivates A3: keep pushing toward agent-buildable analytics,
+but put an algebra underneath so the next structures are composed inside laws
+instead of imitated from the last file. Look at those requirements through that
+lens and they sort into three kinds. Some are **laws** that could execute and
+don't. Some are **judgments** that genuinely cannot be derived. And some are
+**prohibitions standing in for missing abstractions** —
+`ANALYTICAL-NO-FORCE-REDO-ARGS` forbids a knob because invalidation cannot be
+computed; the mandated two-phase rollup order is policy because the operator
+laws are unstated; `ANALYTICAL-CODE-GEN`'s canonical forms and six named
+anti-patterns exist because agents author by imitation rather than by
+construction.
 
 A3 is the attempt to move the first kind into code, give the second kind a
-declared slot, and let the third kind dissolve — by putting an algebra under
-the fast-evolving analytical structures operators and agents keep asking for.
+declared slot, and let the third kind dissolve — so humans and agents can keep
+evolving analytical structure without the construction site having to invent a
+new vernacular for every floor.
+
 
 ## Historical analogy — why an *algebra*
 
@@ -235,12 +241,12 @@ Two consequences worth stating plainly:
 
 A third consequence is predictive rather than corrective. A linear `map` commutes
 with `roll`, which is *why* several quantity×rate derivatives could be unified
-into one class — discovered empirically in the reference implementation, but
-the same law says which derivatives cannot unify that way (anything non-linear
-must be computed after the fold), and it surfaces a live side condition: a
-linear `qty × rate` map holds **only while the rate is constant over the roll
-window**. Time-varying rates break it, and nothing in a registry of bare
-callables would notice.
+into one class — glimpsed in that first construction attempt, but the same law
+says which derivatives cannot unify that way (anything non-linear must be
+computed after the fold), and it surfaces a live side condition: a linear
+`qty × rate` map holds **only while the rate is constant over the roll window**.
+Time-varying rates break it, and nothing in a registry of bare callables would
+notice.
 
 ## Intended shape (not yet built)
 
@@ -265,8 +271,8 @@ Increment order, smallest decisive first:
    and the one that makes ill-typed rollups unconstructible rather than merely
    regrettable.
 3. **Ship the three-gate model as the headline abstraction** — maturity /
-   freshness / invalidation as three separately-testable gates is the most
-   transferable idea in the source harness, and most systems conflate the latter
+   freshness / invalidation as three separately-testable gates is among the
+   clearest ideas that attempt surfaced, and most systems conflate the latter
    two.
 4. **A conformance runner, not a requirements corpus** — the generic asset is
    "requirements execute and are checked in CI," never the specific requirements.
@@ -282,9 +288,9 @@ the derivation of views from metrics. It stops at three walls, on purpose:
 - **Judgment is not algebraic.** "That reading looks off" is a threshold policy —
   scope-configured, occasionally political, changeable without any underlying
   fact changing. It can be modelled as a morphism to a label lattice, but there
-  are no useful rewrite laws, so there is nothing to optimize. The reference
-  implementation reflects this: **many MetricSet classes against few judgment
-  facades.** That asymmetry is the honest boundary, not a gap.
+  are no useful rewrite laws, so there is nothing to optimize. Early attempts
+  already show the shape: **many metric facades against few judgment facades.**
+  That asymmetry is the honest boundary, not a gap.
 - **Presentation is a different formalism.** Charts, tables, tabs, row/column
   semantics belong to a grammar of graphics. Unifying it with an aggregation
   algebra would be a category error.
@@ -296,9 +302,9 @@ the derivation of views from metrics. It stops at three walls, on purpose:
   side conditions. Parametrize those; never hard-code the values.
 
 One boundary is a feature rather than a limitation. Real scope hierarchies are
-not lattices — the source domain's own draft requirement concedes that not every
-parent has a clean child partition. So `roll` over scope carries a **partition
-side condition**: aggregating to a parent is meaningful only if the children
+not lattices — early domain drafts already concede that not every parent has a
+clean child partition. So `roll` over scope carries a **partition side
+condition**: aggregating to a parent is meaningful only if the children
 partition it, with no gaps and no double-counting. A3 should make coverage a
 first-class, propagated property. Current practice sums whatever children were
 found, which is exactly how coverage gaps become silent undercounts.
@@ -324,14 +330,14 @@ found, which is exactly how coverage gaps become silent undercounts.
 - Do not add a governance module that has no runner. Governance that only
   documents is worse than none once it carries an import path — it looks official
   while it rots.
-- Do not import the source project's 32 requirements into `a3`. They belong to
+- Do not import any one project's requirements corpus into `a3`. Those belong to
   the consuming project; only their executable form belongs here.
 - Do not let a bucket-(c) prohibition in because it is currently true. Fix the
   abstraction or leave it in the domain.
-- Do not generalize beyond what a second consumer has actually demanded. This
-  layer is being factored from **n = 1**, and frameworks factored from one example
-  come out shaped like that example. Extract what the de-domaining exercise
-  already proved generic; let the rest wait.
+- Do not generalize beyond what a second consumer has actually demanded. A3 is
+  being abstracted from **one unfinished attempt** (n = 1). Frameworks shaped by
+  a single construction site come out shaped like that site. Extract what the
+  de-domaining exercise already proved generic; let the rest wait.
 - Do not let `a3` acquire a storage opinion. The moment it does, it stops being
   the floor and becomes a second `agent_neo`.
 
@@ -345,26 +351,26 @@ found, which is exactly how coverage gaps become silent undercounts.
 2. **Packaging.** `a3` inside `agent_neo` ships an algebra inside a Django/Neo4j
    distribution, which works against the goal of reuse beyond one project. Revisit
    when a second consumer appears; until then the import boundary is the hedge.
-3. **Concept as recipe vs Concept as term.** The source design already has the
+3. **Concept as recipe vs Concept as term.** Early designs already sketch the
    right node — a design-level Concept holding "meaning, compute logic, declared
-   dependencies" — but it currently holds a Python method pointer. If it held the
-   term instead, dependency edges would derive from free variables rather than
-   hand declaration, Concepts would become diffable, invalidation could narrow to
-   affected subterms, and explanation would be term pretty-printing. That is the
-   whole distance between the current system and an algebraic one. Not yet a
-   commitment.
-4. **Operator set beyond folds.** Every operator in the source engine is a fold
-   along one dimension. The observed demand is full of `join`, `compare`
-   (period-over-period, peer-vs-peer) and `rank` — currently thousands of lines of
+   dependencies" — but today it often holds a Python method pointer. If it held
+   the term instead, dependency edges would derive from free variables rather
+   than hand declaration, Concepts would become diffable, invalidation could
+   narrow to affected subterms, and explanation would be term pretty-printing.
+   That is the whole distance between a construction-site codebase and an
+   algebraic one. Not yet a commitment.
+4. **Operator set beyond folds.** Most operators in that first attempt are folds
+   along one dimension. Observed demand is full of `join`, `compare`
+   (period-over-period, peer-vs-peer) and `rank` — currently large amounts of
    hand-written composition code that does not know it is a join. Blocked on (1).
 
 ## Related
 
 - `agent_neo/README.md` — the current package layering.
-- `agent_neo/analytical_product/` — the interpreter A3 would be factored out from.
-- The reference implementation — a production, agent-authored analytical layer
-  built on `agent_neo`, and so far the only consumer. Its governance harness
-  (requirements corpus, necessity/sufficiency design proof, health assessment) is
-  the source material this charter generalizes from. It is not public; the
-  observations quoted above are reproduced here without identifying detail
-  because they are evidence about the *medium*, not about that project.
+- `agent_neo/analytical_product/` — machinery A3 would lift and reinterpret.
+- The motivating attempt — an unfinished, agent-authored analytical layer built
+  on `agent_neo`. Construction site, not cathedral: its scaffolding and its
+  drift are what inspire abstracting an `a3` floor so the next attempt can
+  evolve under laws. It is not public; observations above are reproduced without
+  identifying detail because they are evidence about the *medium*, not a claim
+  that the attempt is finished or exemplary.
