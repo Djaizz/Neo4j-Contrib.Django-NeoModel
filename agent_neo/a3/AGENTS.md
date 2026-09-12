@@ -8,6 +8,13 @@ This document records **why this layer should exist and what belongs in it**. No
 A3 code has been written yet. Everything under "Intended shape" is intent, not
 inventory — verify against the directory before relying on any module named here.
 
+### Design aspiration
+
+A3 aims for the same kind of leverage Codd's relational algebra gave databases:
+a small formal substrate that lets everyday surfaces (SQL, ORMs — here, domain
+packages and agent-authored Concepts) stay flexible **and** reliably understood
+by humans and machines. See [Historical analogy](#historical-analogy--why-an-algebra).
+
 ### Packaging (provisional)
 
 A3 lives inside `agent_neo` for now, which means it ships inside the
@@ -52,13 +59,48 @@ and six named anti-patterns exist because agents author by imitation rather than
 by construction.
 
 A3 is the attempt to move the first kind into code, give the second kind a
-declared slot, and let the third kind dissolve.
+declared slot, and let the third kind dissolve — by putting an algebra under
+the fast-evolving analytical structures operators and agents keep asking for.
+
+## Historical analogy — why an *algebra*
+
+Edgar Codd's relational algebra did not invent databases. It gave a **small,
+closed set of operators with laws** over a uniform carrier (relations). That
+substrate is what made SQL dialects, query planners, and later ORMs (Django ORM
+and kin) both *flexible* and *reliable*: humans and machines can invent new
+queries and wrappers freely **because** the underlying moves stay inside a
+system that is well understood, composable, and checkable. The surface language
+varies; the algebra does not.
+
+Analytical products need the same kind of floor. Without it, structure grows as
+Python methods, prompt-shaped requirements, and ad-hoc rollup helpers — and
+drifts for the reasons above. A3's goal is to be that foundational algebra so
+domain packages (and the agents that author them) can respond to operator needs
+**without** leaving the space of things machines and humans both reliably
+understand.
+
+The analogy is about *leverage*, not identity:
+
+| Relational world | A3 target |
+| --- | --- |
+| Relation (typed tuples) | Carrier over scope × time × classification, with coverage |
+| Selection / projection / join / union | Restrict, roll, map, and (later) join / compare / rank |
+| Algebraic equivalences → optimizer rewrites | Composition laws → property tests and safe reordering |
+| Integrity constraints | Maturity / freshness / invalidation gates; partition side conditions |
+| SQL + ORM as the everyday surface | Domain Concepts / packages as the everyday surface |
+
+A3 is **not** "SQL for Neo4j" and not a bid to replace graph storage. It is the
+bet that analytical flexibility under agent authorship needs the same kind of
+formal floor relational systems already have — or governance will keep rotting
+into documents.
 
 ## What A3 is
 
 **A carrier, a set of operators that compose lawfully over it, and the gates that
 decide when a stored answer is still an answer** — for analytical layers whose
-author is an agent.
+author is an agent. That is the relational-algebra lesson applied to
+analytical products: close the moves, publish the laws, let the surface evolve.
+
 
 Three tiers, with A3 as the new floor:
 
