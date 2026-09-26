@@ -2,18 +2,22 @@
 
 An :class:`~agent_neo.a3.product.Ask` resolves to the identities it *should* produce
 (:class:`Resolver` — the interpreter's job; it needs a calendar and, for a per-kind ask, the
-subjects in scope). What the :class:`Store` holds is a subset. The difference is the
-coverage: the denominator is the ask, never the data.
+subjects in scope) and a :class:`Store` says which of them exist and hands back their
+instances. :func:`carrier_from_instances` turns that into a carrier whose expected set is the
+resolved identities, whose cells are the instances found, and whose tag is decided by the
+concept's :class:`~agent_neo.a3.product.Field` declaration for the field read:
 
-What a payload field *is* decides how it enters the algebra. The concept says
-(:class:`~agent_neo.a3.product.Field`): a leaf observation becomes a leaf carrier that may be
-lifted into any operator; a stored accumulator becomes a carrier already tagged with its
-operator, ready to roll further; a stored reported value becomes a carrier that remembers it
-was lowered, so ``lift`` refuses it. A stored mean can be read and compared; it can never be
-averaged again.
+- ``LEAF`` — plain values, ready to be lifted into any operator;
+- ``ACCUMULATOR`` — the operator's storage columns, decoded back into accumulators through
+  the operator's own ``decode``, so a stored ``(average, count)`` re-enters as a mean and
+  rolls further;
+- ``REPORTED`` — values already lowered, remembered as such, so a stored mean cannot be
+  averaged again.
 
-Going back, ``instances_from_carrier`` turns a carrier into the instances an interpreter
-persists, each carrying as lineage the keys of the leaves it came from.
+:func:`instances_from_carrier` is the reverse: it refuses a carrier whose tag does not match
+the field's declared role, writes accumulators into their declared columns, canonicalizes
+coordinates under the interpreter's :class:`~agent_neo.a3.product.KeyScheme`, and records
+the stored leaves behind each cell as lineage — whatever families they came from.
 """
 
 
@@ -35,38 +39,54 @@ from agent_neo.a3.product import (
     KeyScheme,
     LifecycleStatus,
     LineageRef,
+    Refuse,
+    RefuseReason,
 )
 
 __all__ = (
     'Resolver',
     'Store',
     'carrier_from_instances',
+    'columns_of',
     'instances_from_carrier',
     'lowered_name',
 )
 
 
 class Resolver(Protocol):
-    """Ask → the identities it should produce: window enumeration, subject enumeration, maturity clamping."""
+    """An ask → the identities it should produce. The interpreter owns the calendar and the
+    subject enumeration; it also clamps windows for maturity here, so ``gate`` sees only
+    settled periods on that path."""
 
     def resolve(self, ask: Ask) -> tuple[Identity, ...]: ...
 
 
 class Store(Protocol):
-    """The current instances at identities. ``present`` answers without payloads; ``fetch`` returns them."""
-
     def present(self, identities: Iterable[Identity]) -> frozenset[Identity]: ...
 
     def fetch(self, identities: Iterable[Identity]) -> tuple[Instance, ...]: ...
 
 
-def lowered_name(spec: Field, operators: OperatorRegistry | None) -> str:
-    """The name ``lower`` would have recorded for this field's operator: its class name when the
-    registry can resolve it, else the registry name as declared. Shared by the bridge and the shape
-    checker so the two never disagree about what a stored report was lowered from."""
-    if operators is not None and spec.operator in operators:
-        return type(operators.get(spec.operator)).__name__
-    return spec.operator or ''
+def _operator(spec: Field, operators: OperatorRegistry | None, field: str) -> Any:
+    if operators is None or spec.operator not in operators:
+        raise ValueError(f'field {field!r} is declared {spec.role.value} of {spec.operator!r}; a registry that knows it is required')
+    return operators.get(spec.operator)
+
+
+def lowered_name(spec: Field, operators: OperatorRegistry | None, field: str = '') -> str:
+    """The name ``lower`` records for this field's operator: its class name. One convention,
+    shared by the bridge and the shape checker, so a stored report and a freshly lowered one
+    compare equal."""
+    return type(_operator(spec, operators, field)).__name__
+
+
+def columns_of(spec: Field, field: str, operator: Any) -> tuple[str, ...]:
+    """The payload names an ACCUMULATOR field's columns live under."""
+    columns = spec.columns or (field,)
+    if len(columns) != len(operator.columns):
+        raise ValueError(f'field {field!r} holds {type(operator).__name__} accumulators, which store as {operator.columns}; '
+                         f'{len(columns)} column name(s) declared')
+    return columns
 
 
 def carrier_from_instances(
@@ -76,31 +96,42 @@ def carrier_from_instances(
     field: str,
     spec: Field,
     operators: OperatorRegistry | None = None,
+    scheme: KeyScheme = PLAIN_KEY_SCHEME,
 ) -> Carrier[Any]:
-    """Cells from the instances found, expected set from the ask, tag from the field's role.
+    """Cells from the instances found, expected set from the ask, tag from the field's role,
+    family from the identities.
 
-    A payload holding ``None`` for the field is a cell that is *absent* (and so missing), not
-    a zero. An instance outside the expected set, or two at one coordinate, is a broken store
-    and raises.
+    Coordinates on both sides are canonicalized under ``scheme`` first, so an instance a store
+    wrote with explicit neutral classifications meets the ask that omitted them: one identity,
+    one cell. A payload holding ``None`` for the field — or for any of an accumulator's
+    columns — is a cell that is *absent* (and so missing), not a zero. An instance outside the
+    expected set, or two at one coordinate, is a broken store and raises.
     """
-    expected_coords = frozenset(identity.coordinate for identity in expected)
+    expected = tuple(expected)
+    families = {identity.product for identity in expected}
+    if len(families) > 1:
+        raise ValueError(f'one carrier holds one family; the expected set names {sorted(families)}')
+    family = next(iter(families), None)
+    expected_coords = frozenset(scheme.canonical(identity.coordinate) for identity in expected)
+    operator = _operator(spec, operators, field) if spec.role is not FieldRole.LEAF else None
+    columns = columns_of(spec, field, operator) if spec.role is FieldRole.ACCUMULATOR else (field,)
+
     cells: dict[Coordinate, Any] = {}
     for instance in instances:
-        coordinate = instance.identity.coordinate
+        coordinate = scheme.canonical(instance.identity.coordinate)
         if coordinate not in expected_coords:
-            raise ValueError(f'instance {instance.identity.cache_key()!r} is outside the expected set of the ask')
+            raise ValueError(f'instance {instance.identity.cache_key(scheme)!r} is outside the expected set of the ask')
         if coordinate in cells:
             raise ValueError(f'two instances for one coordinate {coordinate!r}; the store has lost at-most-one-current')
-        value = instance.payload.get(field)
-        if value is not None:
-            cells[coordinate] = value
+        values = tuple(instance.payload.get(column) for column in columns)
+        if any(value is None for value in values):
+            continue
+        cells[coordinate] = operator.decode(*values) if spec.role is FieldRole.ACCUMULATOR else values[0]
     if spec.role is FieldRole.ACCUMULATOR:
-        if operators is None:
-            raise ValueError(f'field {field!r} holds {spec.operator!r} accumulators; an operator registry is required to tag them')
-        return Carrier(cells, expected_coords, operators.get(spec.operator))
+        return Carrier(cells, expected_coords, operator, family=family)
     if spec.role is FieldRole.REPORTED:
-        return Carrier(cells, expected_coords, None, (lowered_name(spec, operators),))
-    return Carrier(cells, expected_coords)
+        return Carrier(cells, expected_coords, None, (type(operator).__name__,), family=family)
+    return Carrier(cells, expected_coords, family=family)
 
 
 def instances_from_carrier(
@@ -110,25 +141,47 @@ def instances_from_carrier(
     computed_at: datetime,
     computed_by: str,
     field: str,
-    source_product: str | None = None,
+    spec: Field,
+    operators: OperatorRegistry | None = None,
     scheme: KeyScheme = PLAIN_KEY_SCHEME,
     lifecycle: LifecycleStatus = LifecycleStatus.OFFICIAL,
-) -> tuple[Instance, ...]:
-    """One instance per present cell. Lineage = keys of the leaf identities behind the cell,
-    under ``source_product`` (the family the leaves belong to; defaults to ``product``).
+    producing: LifecycleStatus | None = LifecycleStatus.OFFICIAL,
+) -> tuple[Instance, ...] | Refuse:
+    """One instance per present cell, at the canonical coordinate, in the field's declared
+    shape. Lineage = the keys of the stored leaves behind the cell (:meth:`Carrier.sources`).
 
-    Persist a *tagged* carrier and the field is an ACCUMULATOR the concept should declare as
-    such; persist a lowered one and it is REPORTED. The concept's declaration, not this call,
-    is what the algebra consults later — keep them in agreement."""
-    leaf_family = source_product or product
+    The carrier's tag must be what the field declares — accumulators of the field's operator
+    into an ``ACCUMULATOR`` field, its reports into a ``REPORTED`` field, plain values into a
+    ``LEAF`` — or the write is refused: the declaration is what the algebra consults when the
+    product is read back, and the two may not disagree.
+    """
+    if carrier.operator is not None:
+        if spec.role is not FieldRole.ACCUMULATOR or _operator(spec, operators, field) != carrier.operator:
+            return Refuse(RefuseReason.UNSUPPORTED_COMPOSITION,
+                          f'{type(carrier.operator).__name__} accumulators cannot be stored in {field!r}, declared {spec.role.value}'
+                          f'{" of " + spec.operator if spec.operator else ""}', {'field': field, 'operator': carrier.operator})
+        columns = columns_of(spec, field, carrier.operator)
+        payload_of = lambda value: dict(zip(columns, carrier.operator.encode(value)))
+    elif carrier.lowered_from:
+        if spec.role is not FieldRole.REPORTED or lowered_name(spec, operators, field) != carrier.lowered_from[-1]:
+            return Refuse(RefuseReason.UNSUPPORTED_COMPOSITION,
+                          f'reported {carrier.lowered_from[-1]} values cannot be stored in {field!r}, declared {spec.role.value}'
+                          f'{" of " + spec.operator if spec.operator else ""}', {'field': field, 'lowered_from': carrier.lowered_from})
+        payload_of = lambda value: {field: value}
+    else:
+        if spec.role is not FieldRole.LEAF:
+            return Refuse(RefuseReason.UNSUPPORTED_COMPOSITION,
+                          f'plain values cannot be stored in {field!r}, declared {spec.role.value} of {spec.operator!r}', {'field': field})
+        payload_of = lambda value: {field: value}
     return tuple(
         Instance(
-            identity=Identity(product, coordinate),
-            payload={field: value},
+            identity=Identity(product, scheme.canonical(coordinate)),
+            payload=payload_of(value),
             computed_at=computed_at,
             computed_by=computed_by,
+            producing=producing,
             lifecycle=lifecycle,
-            lineage=tuple(LineageRef(Identity(leaf_family, leaf).cache_key(scheme)) for leaf in sorted(carrier.sources(coordinate), key=repr)),
+            lineage=tuple(LineageRef(leaf.cache_key(scheme)) for leaf in sorted(carrier.sources(coordinate), key=repr)),
         )
         for coordinate, value in carrier.cells.items()
     )

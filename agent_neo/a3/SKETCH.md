@@ -1,9 +1,12 @@
 # A3 — module map and the laws each module serves
 
 Status: **v1 implemented and law-tested**, storage-agnostic, importable with no Django,
-neomodel or Neo4j driver present (`tests/agent_neo/a3/test_import_boundary.py`). Not yet
-bound to the graph interpreter (`agent_neo.analytical_product`); the bindings it needs are
-listed at the end. Charter and rationale: [`AGENTS.md`](AGENTS.md).
+neomodel or Neo4j driver present (`tests/agent_neo/a3/test_import_boundary.py`). Every law in
+`laws.py` — including the lifecycle contracts — is executable: the lifecycle ones run against
+the reference interpreter in `reference.py`, which is `ensure` written from the blocks alone
+over an in-memory store. Not yet bound to the graph interpreter
+(`agent_neo.analytical_product`); the binding contract is stated at the end. Charter and
+rationale: [`AGENTS.md`](AGENTS.md).
 
 ## What an author writes
 
@@ -22,70 +25,92 @@ evaluate(term, env)   # Carrier | Refuse — the same plan, over values
 "Mean zone temperature per floor, per day, day shift only; refuse if any zone is missing."
 Every name in the term — the operator, the lattices, the classifier — is bound by the
 `Env`; the algebra ships none of them. `shape` and `evaluate` agree by construction
-(`LAW_SHAPE_SOUND`): every refusal is decided before a value is touched.
+(`LAW_SHAPE_SOUND`): every refusal is decided before a value is touched. A recipe that serves
+a whole family writes its leaves *relative* to the ask being served
+(`Ensure(AskFrom('zone_temp', 'zones_of'), 'temp')`); what it reads stays static.
 
 ## Modules
 
 | Module | Holds | Laws it serves |
 | --- | --- | --- |
 | `carrier.py` | `Coordinate` (hashable; two rollable `Dimension`s plus classifications), `Absent` | the address space everything else keys on |
-| `algebra.py` | `Carrier` (cells, `expected`, operator tag, `lowered_from`, provenance, gaps); primitives `lift` `relift` `roll` `restrict` `classify` `rekey` `map` `join` `lower`; derived `slice` `shift` `scale` `diff`; boundary `rank`; `plan_roll` (shared with the shape checker) | TAG_GUARDS_FOLD · REPORTED_NEVER_LIFTED · DISTRIBUTIVE_RELIFT · ROLL_REQUIRES_PARTITION · ROLL_REFUSES_DOUBLE_COUNT · EMPTY_FOLD_IS_ABSENT · ROLL_DIMENSION_COMMUTE · SLICE_COMMUTES_WITH_ROLL · CLASSIFY_IS_KEY · JOIN_INNER_CELLS_UNION_EXPECTED · REKEY_IS_A_FUNCTOR · DERIVED_BY_EXPANSION · SCALE_ROLL_COMMUTE · PROVENANCE_IS_LEAVES |
-| `operators.py` | `Operator` = `lift`/`combine`/`lower` + `kind` (Gray) + `partial_ok`; `Sum` `Count` `Min` `Max` (distributive), `Mean` `WeightedMean` `Proportion` (algebraic, one `RatioAccumulator`), `Percentile` (holistic, needs a `Sketch`); `OperatorRegistry` | COMBINE_ASSOCIATIVE · COMBINE_COMMUTATIVE · LOWER_LIFT_SINGLETON · HOLISTIC_NEEDS_ACCUMULATOR · PARTIAL_IS_ESTIMATE |
+| `algebra.py` | `Carrier` (cells, `expected`, operator tag, `lowered_from`, provenance as identities, gaps, family); primitives `lift` `roll` `restrict` `rekey` `map` `join` `lower`; derived `slice` `shift` `classify` `scale` `diff`; boundary `rank`; `plan_roll` (shared with the shape checker); every primitive absorbs a `Refuse` | REFUSE_ABSORBS · TAG_GUARDS_FOLD · REPORTED_REENTRY · ROLL_REQUIRES_PARTITION · ROLL_REFUSES_DOUBLE_COUNT · EMPTY_FOLD_IS_ABSENT · ROLL_PATH_INDEPENDENT · ROLL_DIMENSION_COMMUTE · SLICE_COMMUTES_WITH_ROLL · CLASSIFY_IS_KEY · JOIN_INNER_CELLS_UNION_EXPECTED · REKEY_IS_A_FUNCTOR · DERIVED_BY_EXPANSION · SCALE_ROLL_COMMUTE · PROVENANCE_IS_LEAVES |
+| `operators.py` | `Operator` = `lift`/`combine`/`lower` + `exact` + `partial_ok` + `value_type` + storage `columns` with `encode`/`decode`; `Sum` `Min` `Max` (exact), `Count`, `Mean` `WeightedMean` `Proportion` (one `RatioAccumulator`, stored as report + denominator), `Percentile` (needs a `Sketch`); `OperatorRegistry` that runs the laws over samples at registration | COMBINE_ASSOCIATIVE · COMBINE_COMMUTATIVE · LOWER_LIFT_SINGLETON · EXACT_OPERATOR · HOLISTIC_NEEDS_ACCUMULATOR · PARTIAL_IS_ESTIMATE |
 | `lattice.py` | `Lattice` protocol (`up`/`down` over `(level, key)`, multi-valued), `MappingLattice` | LATTICE_CONSISTENT; the slot every roll consults |
-| `product.py` | `Layer`, `LifecycleStatus` (the interpreter re-exports these), `Concept` (family + revision + `Field` roles + optional term), `Identity` + `KeyScheme` (with `canonical`), `Instance` + `LineageRef`, `Ask`, `Refuse`/`RefuseReason`, `servable` | KEY_DEVERSIONED · DEPENDS_ON_DERIVED · SERVABLE · the FieldRole half of REPORTED_NEVER_LIFTED |
+| `product.py` | `Layer`, `LifecycleStatus` (the interpreter re-exports these), `Concept` (family + opaque revision + `Field` roles and columns + optional term; dependencies derived from the term or declared without one), `Identity` + `KeyScheme` (with `canonical`), `Instance` + `LineageRef`, `Ask`, `Refuse`/`RefuseReason`, `servable` | KEY_DEVERSIONED · DEPENDS_ON_DERIVED · SERVABLE · the FieldRole half of REPORTED_REENTRY |
 | `gates.py` | `is_mature` / `maturity_gate`, `freshness_gate`, `lineage_gate` (from the instance's facts and its lineage refs), `gate` → `GateOutcome` | GATE_ORDER · LINEAGE_FROM_FACTS |
-| `bridge.py` | `Resolver` and `Store` protocols; `carrier_from_instances` (expected = the ask; tag from the field's role); `instances_from_carrier` (lineage = leaves) | BRIDGE_DENOMINATOR · PROVENANCE_IS_LEAVES |
-| `term.py` | term nodes (`Ensure` `Lift` `Relift` `Roll` `Restrict` `Slice` `Classify` `Shift` `Rekey` `Map` `Join` `Lower`), `Env` (operators, lattices, functions, classifiers, `now`, maturity), `shape`, `evaluate`, `products_read`, `check_layers` | SHAPE_SOUND · DEPENDS_ON_DERIVED · LAYERS |
-| `ops.py` | the three contracts only a store can fulfil: `Ensure` `Retire` `Invalidate` | ENSURE_IDEMPOTENT · RETIRE_NOT_MUTATE · REDO_DERIVED (interpreter-tested) |
-| `laws.py` | the 31 laws, each with hypotheses and the block it forces | — |
+| `bridge.py` | `Resolver` and `Store` protocols; `carrier_from_instances` (expected = the ask, canonical under the scheme; tag from the field's role; accumulators decoded from their columns); `instances_from_carrier` (refuses a tag/role mismatch; accumulators encoded into their columns; lineage = the stored leaves, whatever families) | BRIDGE_DENOMINATOR · BRIDGE_ROUND_TRIP · PROVENANCE_IS_LEAVES · KEY_DEVERSIONED |
+| `term.py` | term nodes (`Ensure` with a literal `Ask` or an `AskFrom`, `Lift` `Roll` `Restrict` `Slice` `Classify` `Shift` `Rekey` `Map` `Join` `Lower`), `Env` (operators, lattices, functions, classifiers, scheme, `now`, maturity, the ask being served, `ensure`), `shape`, `evaluate`, `leaves`, `leaf_ask`, `products_read`, `check_layers` | SHAPE_SOUND · DEPENDS_ON_DERIVED · LAYERS · ENSURE_RECURSIVE |
+| `ops.py` | the three contracts only a store can fulfil: `Ensure` `Retire` `Invalidate` | ENSURE_IDEMPOTENT · RETIRE_NOT_MUTATE · REDO_DERIVED |
+| `reference.py` | `MemoryStore` (Store + Retire + Invalidate over histories; `fetch` refreshes lineage facts) and `ReferenceInterpreter` (`ensure` from the blocks: ensure leaves, gate, evaluate over what was served, bridge, retire) | ENSURE_IDEMPOTENT · ENSURE_RECURSIVE · RETIRE_NOT_MUTATE · REDO_DERIVED — executable; the conformance target for any binding |
+| `laws.py` | the 35 laws, each with hypotheses and the block it forces | — |
 
 ## The decisions, in one place
 
 - **Coverage is derived, not stored.** `Carrier.expected` is the denominator; it enters at the
   bridge from the ask and is transformed by every primitive. `missing = expected − cells`.
-  A roll's denominator for a parent is `lattice.down(parent)`, so a child no ask mentioned is
-  a gap — minus children the carrier knows under a sibling classification, minus children a
-  bound classifier says would not carry the parent's classification.
-- **Two tags make bad folds unwritable.** `operator` says the cells are accumulators of one
-  operator; `lowered_from` says the values are some operator's reported output. `roll` needs
-  the first; `lift` refuses the second. Whether the mean was computed a moment ago or read
-  back from a `REPORTED` field, it never re-enters a fold. The one lawful way back is
-  `relift`, for a *distributive* operator's own output — a sum of stored sums is a sum — and
-  that is the only place Gray's classification is consulted.
-- **Join keeps one-sided gaps.** Cells are inner, but the expected set is the union: a
-  coordinate one side lacks is a gap of the join, not a coordinate that stops mattering.
+- **A roll's denominator is intrinsic.** For a parent it is `lattice.down(parent)`, less the
+  candidates a bound classifier says would not carry the parent's classification value. It
+  depends on the parent, the lattice and the classifiers — never on what else the carrier
+  holds — so slicing before or after a roll gives the same answer, a child no ask mentioned
+  is a gap, and a classification that varies along the rolled dimension refuses without its
+  classifier rather than guessing. A coordinate carrying a value its classifier would not
+  assign folds into nothing. A child with two parents refuses under every policy.
+- **Two tags, and a re-entry rule, make bad folds unwritable.** `operator` says the cells are
+  accumulators of one operator; `lowered_from` is the ordered history of operators whose
+  reports these values are. `roll` needs the first. `lift` refuses a value into an operator
+  already in its history unless that operator is *exact* (its report is its accumulator): a
+  sum of stored sums is a sum, rolled further; a mean of means, a count of counts, a p95 of
+  p95s are unconstructible; a mean of daily totals is a mean whose unit of analysis is the
+  day. Whether the mean was computed a moment ago or read back from a `REPORTED` field, the
+  rule is the same.
+- **Provenance is identities.** Every derived cell knows the stored leaves it came from as
+  `(family, coordinate)`, so lineage across a join of two families is exact, and `classify`,
+  `rekey` and `shift` keep pointing at the leaves as stored. Gaps name the finest coordinates
+  known to be missing, so rolling a rolled carrier equals rolling the leaves — in cells,
+  expected, provenance and gaps.
+- **The algebra is closed over `Carrier | Refuse`.** Every primitive returns an input
+  `Refuse` unchanged; a composition never checks between steps.
+- **Join keeps one-sided gaps.** Cells are inner, but the expected set is the union.
 - **The resolver classifies the expected set.** A classified ask (`day=weekday`) expects only
   the coordinates that carry that classification; the same classifiers a roll consults decide
-  which those are. The ask's classification is a slice on the world, not a stamp on every
-  coordinate.
-- **Operators are commutative semigroups with a Gray kind.** No unit: the empty fold is
-  `Absent`. `partial_ok` says whether a fold over present children is an estimate (mean,
-  min, quantile) or an undercount (sum, count).
+  which those are.
+- **Operators are commutative semigroups, exact or not, with a storage shape.** No unit: the
+  empty fold is `Absent`, and a report the operator cannot define lowers to an absent cell.
+  `exact` replaces Gray's classification (recoverable from `exact` and `mergeable`).
+  `columns`/`encode`/`decode` are how a stored `(average, count)` re-enters as a mean. The
+  registry runs the laws over samples before it accepts an operator.
 - **Family in the key, revision on the instance.** Retiring a recipe changes no key. Under an
-  interpreter's `KeyScheme` the key is the interpreter's, byte for byte.
+  interpreter's `KeyScheme` the key is the interpreter's, byte for byte, and coordinates that
+  differ only by explicit neutral classifications are one identity — the bridge canonicalizes.
+  A concept's revision is the store's recipe key verbatim.
 - **Three gates, three questions, one order.** Maturity refuses; absence and lineage
   recompute before age is considered; freshness recomputes; then serve. `now` is injected.
-  Lineage is decided from facts on the instance and its `LineageRef`s — its own status and
-  flag, whether anything records its recipe, the recipe's status, each input's status, flag and
-  last change — never from a bit someone else derived.
+  Lineage is decided from facts on the instance and its `LineageRef`s. An instance whose
+  recipe nobody looked up (`producing=None`) is recomputed, not served.
+- **Reading a leaf is ensuring it.** An interpreter ensures a recipe's leaves before it gates
+  the recipe's own instances, then evaluates over exactly what was served; a refused upstream
+  is a missing cell, never a stale value read around the gate. Invalidation therefore reaches
+  every dependent through refreshed facts; a cascade of flags is an optimisation.
 - **Terms name things; environments bind them.** Nothing in a3 is a policy value.
 
 ## Refusals and where they come from
 
 | `RefuseReason` | Produced by |
 | --- | --- |
-| `ILL_TYPED_ROLL` | `roll` on values; `lift` on accumulators or on lowered values; `relift` of anything but a distributive operator's own output |
+| `ILL_TYPED_ROLL` | `roll` on values; `lift` on accumulators; `lift` of a report into an inexact operator already in its history |
 | `NO_MERGEABLE_ACCUMULATOR` | `lift`/`roll` with a holistic operator and no accumulator bound |
-| `INCOMPLETE_PARTITION` | `roll` under `REFUSE`; `PARTIAL` with an operator whose `partial_ok` is false |
-| `DOUBLE_COUNTED` | `roll` under `REFUSE` when a child has more than one parent |
-| `UNSUPPORTED_COMPOSITION` | `map`/`join`/`scale`/`rank` on accumulators; `lower` on values; mixed levels; a lattice with no path; re-`classify`; non-injective `rekey`/`shift`; a missing rate |
+| `INCOMPLETE_PARTITION` | `roll` under `REFUSE`; `PARTIAL` with an operator whose `partial_ok` is false; the reference `ensure` when a recipe produced nothing at an asked identity |
+| `DOUBLE_COUNTED` | `roll`, under every policy, when a child has more than one parent |
+| `UNSUPPORTED_COMPOSITION` | `map`/`join`/`scale`/`rank` on accumulators; `lower` on values; mixed levels; a lattice with no path or an inconsistent one; a mislabelled classified child; re-`classify`; `slice` on a classification the coordinates do not carry; non-injective `rekey`/`shift`; a missing rate; a bridge write whose tag does not match the declared role; a recipe that does not produce the asked coordinate |
 | `IMMATURE_WINDOW` | `maturity_gate`; a term's `Roll` along the period when the environment carries `now`, a lag and period ends |
-| `LAYER_VIOLATION` | `check_layers` on a concept whose term reads above its layer |
+| `LAYER_VIOLATION` | `check_layers` on a concept that reads above its layer |
 | `NOT_SERVABLE` | `servable` on a concept that is not a view |
+| `NO_RECIPE` | `ensure` of a missing or invalid instance whose concept holds no term |
 
-Programmer misuse — lowering an empty accumulator, calling a bare `Percentile` directly,
-lifting a value type the operator does not take — raises `IllegalOperatorUse` instead. A plan
-never reaches the first two; the third is the one failure a payload alone reveals.
+Programmer misuse — calling a bare `Percentile` directly, lifting a value type the operator
+does not take, registering an operator that breaks its own laws, declaring an accumulator
+field without its columns — raises `IllegalOperatorUse` / `ValueError` instead.
 
 ## What is not in a3, on purpose
 
@@ -95,30 +120,42 @@ never reaches the first two; the third is the one failure a payload alone reveal
 - Any sketch implementation: `Percentile` takes a `Sketch` factory; digests live in domain packs.
 - Judgment (`Interpret`) and presentation: a threshold over a metric is a morphism to a
   label lattice with no rewrite laws; charts and tables are a different grammar.
-- Storage: `Ensure`, `Retire`, `Invalidate`, `Project`, `Explain` are contracts the
-  interpreter fulfils.
+- Storage: `Ensure`, `Retire`, `Invalidate` are contracts the interpreter fulfils;
+  `reference.py` shows what fulfilling them looks like.
 
-## Binding the interpreter (`agent_neo.analytical_product`) — what remains
+## Binding the interpreter (`agent_neo.analytical_product`) — the contract
 
 Already done: `ComputedNodeLayer` and `NodeLifecycleStatus` are the a3 enums; a3 keys under
-the interpreter's `KeyScheme` are byte-identical to `build_cache_key` (tested). Scope of that
-claim: families keyed by `build_cache_key`. Products keyed another way (range keys on report
-views, operator rollups with their own slice order) need a `KeyScheme` of their own or a
-migration; `AnalyticalProductIdentity` itself is unchanged and stays the interpreter's public
-contract — a3's `Identity` is a projection of it.
+the interpreter's `KeyScheme` are byte-identical to `build_cache_key` (tested against literal
+key strings, both carry forms). Scope of that claim: families keyed by `build_cache_key`.
+Products keyed another way (range keys on report views, operator rollups with their own slice
+order) need a `KeyScheme` of their own or a migration; `AnalyticalProductIdentity` itself is
+unchanged and stays the interpreter's public contract — a3's `Identity` is a projection of it.
 
-Remaining, in order of value:
+A binding conforms when `tests/agent_neo/a3/test_reference.py` passes with its `Store`,
+`Resolver` and `Ensure` in place of the reference ones. Normatively, the binding:
 
-1. A `Resolver` over `AnalyticalProductRequest.resolve_identities` (window enumeration,
-   maturity clamp, and subject enumeration for `subject_key=None`).
-2. A `Store` over the current-instance probe and fetch, mapping node properties to
-   `Instance` (`computed_at`, `lifecycle_status`, `needs_redo_since` → `needs_redo`, the
-   producing concept's status → `producing`) and its dependency edges to `LineageRef`s
-   (status, flag, `updated`), so `lineage_gate` decides what `_is_valid` decides today.
-3. A calendar `Lattice` for the period dimension, and `exclusive_end`, over `util.datetime`.
-4. `Concept.fields` declarations for existing product classes, so stored accumulators can be
-   rolled further and stored reports cannot be re-lifted.
-5. Rewriting `_is_valid` on the three gate functions (behaviour-preserving).
+1. **Resolves classifier-consistently.** `resolve(ask with k=v)` is the coordinates of
+   `resolve(ask without k)` that the classifier bound for `k` admits, stamped `k=v`; the same
+   function is bound in `Env.classifiers`. It applies the maturity clamp once, so on this path
+   `gate` is called with `exclusive_end=None`.
+2. **Fills the policy slots.** `Request → Ask` sets `max_staleness` from the freshness policy
+   and `maturity_lag` from the maturity minutes; `None` never crosses on the interpreter path.
+3. **Maps nodes to facts.** `needs_redo_since IS NOT NULL → needs_redo`; the producing
+   concept's status → `producing` (absent → `None`); each dependency's `(status,
+   needs_redo_since, updated)` → a `LineageRef`; `computed_at` as aware UTC — in one batched
+   query per cohort, so `lineage_gate` decides what `_is_valid` decides today.
+4. **Declares fields.** Every adopted concept declares its `Field` roles and, for
+   accumulators, the payload columns (`Mean` → `('average_…', '…_count')`), and its
+   dependencies until its recipe is a term.
+5. **Ensures leaves first**, then gates, then evaluates over what was served, then persists
+   through `instances_from_carrier` (canonical coordinates, encoded columns, lineage keys
+   routed to dependency edges).
+6. **Builds the subject lattice for the ask's span** and refuses
+   `UNSUPPORTED_COMPOSITION` when membership varies over it ("roll SUBJECT per period first").
+7. **Preserves its public surface**: the `ValueError` on an emptied range; no `Refuse` value
+   leaks out of `AbstractAnalyticalComputedProduct.get()`; `_is_valid` and its helpers stay as
+   thin adapters with unchanged signatures.
 
 **Known divergence.** `LAW_RETIRE_NOT_MUTATE` says a recompute mints a successor and flips
 the prior to `RETIRED`. The interpreter's `cache_key` carries a unique index and its bulk

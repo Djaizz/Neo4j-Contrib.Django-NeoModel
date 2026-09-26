@@ -1,8 +1,9 @@
 """The laws, stated with their hypotheses, each naming the block it forces.
 
 A law is not documentation. It is the reason a block exists: strike the law and the block it
-forces becomes unearned. Every law here has an executable test in ``tests/agent_neo/a3/``,
-except the three interpreter contracts at the end, which say so.
+forces becomes unearned. Every law here has an executable test in ``tests/agent_neo/a3/``; the
+interpreter contracts at the end run against :mod:`agent_neo.a3.reference`, and a
+storage-bound interpreter is conformant when the same tests pass against its store.
 """
 
 
@@ -27,8 +28,9 @@ For Sum, Min, Max, Mean and an accumulator-bound Percentile, and any value v:  l
 """
 
 LAW_HOLISTIC_NEEDS_ACCUMULATOR = """
-kind == HOLISTIC and not mergeable  ⇒  lift(·, op) is Refuse(NO_MERGEABLE_ACCUMULATOR) and
-OperatorRegistry.register(op) raises. An exact multiset is a lawful (unbounded) accumulator.
+not op.mergeable  ⇒  lift(·, op) and roll of accumulators tagged op are Refuse(NO_MERGEABLE_ACCUMULATOR), and the
+registry refuses to register op. mergeable is False only for a Percentile with no sketch bound; an exact
+multiset is a lawful (unbounded) accumulator.
 """
 
 LAW_PARTIAL_IS_ESTIMATE = """
@@ -46,19 +48,22 @@ roll(values) is Refuse(ILL_TYPED_ROLL); lift(accumulators) is Refuse(ILL_TYPED_R
 map / join / scale / rank over accumulators are Refuse(UNSUPPORTED_COMPOSITION).
 """
 
-LAW_REPORTED_NEVER_LIFTED = """
-A carrier with lowered_from ≠ () — the output of lower, or a REPORTED field read from the store —
-is Refuse(ILL_TYPED_ROLL) under lift, and join propagates lowered_from to its result.
-Once lowered, a value never re-enters a fold through lift: mean-of-means and p95-of-p95s cannot be
-written, whether the mean was computed a moment ago or persisted last month.
+LAW_REPORTED_REENTRY = """
+lower appends name(op) to lowered_from; restrict, rekey, map, scale and join carry it (join: ordered union);
+no primitive clears it. lift(c, op) on a carrier with lowered_from ≠ () is Refuse(ILL_TYPED_ROLL) iff
+name(op) ∈ lowered_from and not op.exact; otherwise it succeeds and keeps the history.
+So: a mean of means, a count of counts, a p95 of p95s are unconstructible; a sum of daily sums is the sum
+(exact: rolling further); a mean of daily sums is a mean whose unit of analysis is the day. Forces: exact,
+lift_refusal.
 """
 
-LAW_DISTRIBUTIVE_RELIFT = """
-relift(c, op) re-enters op's OWN reported values as its accumulators iff c.lowered_from == (op,) and
-op.kind is DISTRIBUTIVE — for such an operator the accumulator is the value, so a sum of stored sums
-is a sum. Anything else is Refuse(ILL_TYPED_ROLL). This is the one place AggregateKind is consulted,
-and it is what earns it. Forces: AggregateKind, relift.
+LAW_EXACT_OPERATOR = """
+op.exact  ⇔  lift(lower(a)) == a for every accumulator a. True for Sum, Min, Max; false for Count and every
+ratio and quantile. OperatorRegistry.register(name, op, samples=...) runs LAW_COMBINE_ASSOCIATIVE,
+LAW_COMBINE_COMMUTATIVE, this law and the encode/decode round trip over the samples and raises
+IllegalOperatorUse on a violation: a law an operator breaks is caught at registration, not in a fold.
 """
+
 
 
 # ---------------------------------------------------------------------------
@@ -80,15 +85,29 @@ children the carrier knows under another classification (they belong to P's sibl
 """
 
 LAW_ROLL_REFUSES_DOUBLE_COUNT = """
-If any child has |lattice.up(child)| > 1 at the target level: REFUSE is Refuse(DOUBLE_COUNTED);
-ABSENT and PARTIAL leave every parent that child touches absent.
+A child with more than one parent along the rolled dimension is Refuse(DOUBLE_COUNTED) under every OnMissing
+policy: a lattice that is not a partition is not missing data, and no policy about gaps may fold it.
+Forces: set-valued Lattice.up.
 """
 
 LAW_EMPTY_FOLD_IS_ABSENT = """
-A parent some of whose children were expected but none of which are present is in expected and
-absent from cells, for every operator: no identity element stands in for missing data, so no
-operator needs a unit. Conversely a roll invents no parent the ask never implied:
-expected(roll(c)) == {up(child) for child in c.expected}.
+A parent none of whose children are present is absent, never an operator's unit (there is none); a report
+the operator cannot define (a ratio over nothing) lowers to an absent cell, still expected, so still missing.
+Zero is a value; absence is the lack of one.
+"""
+
+LAW_ROLL_PATH_INDEPENDENT = """
+    roll(roll(c, D → M1), M1 → M2) == roll(c, D → M2)
+in cells, expected, provenance and gaps, for every operator and OnMissing policy, with or without missing
+leaves: gaps name the finest coordinates known to be missing under a parent, and a roll of a rolled
+carrier propagates them rather than recording the intermediate level. This is the rewrite that lets a
+stored daily accumulator stand in for the hours beneath it.
+"""
+
+LAW_REFUSE_ABSORBS = """
+For every primitive p and Refuse r:  p(r, ...) == r  and  p(..., r) == r  (the left refusal when both).
+The algebra is closed over Carrier | Refuse; the first refusal in a composition is its result, and no
+step checks for one. Forces: _absorbing on every primitive; evaluate has no isinstance between steps.
 """
 
 LAW_ROLL_DIMENSION_COMMUTE = """
@@ -102,15 +121,17 @@ orders refuse, or go absent, identically. Forces: Coordinate.moved, Dimension.
 
 LAW_SLICE_COMMUTES_WITH_ROLL = """
     roll(slice(c, k=v)) == slice(roll(c), k=v)
-when the classification k is constant across each parent's children (a shift assigned from
-the hour, rolled along the subject). When k varies across a parent's children — a shift that
-differs by subject — roll first and slice after; roll knows a sibling classification is not a
-gap, slice has already thrown it away.
+whenever a classifier for k is bound to the roll (the denominator is intrinsic: down(parent) admitted by
+the classifier, whatever else the carrier holds). Without one, a classification that varies along the
+rolled dimension makes both orders refuse INCOMPLETE_PARTITION rather than one of them guess.
 """
 
 LAW_CLASSIFY_IS_KEY = """
-After classify(c, k, f), rolling groups by k as by any coordinate component: a subject whose k
-differs from the parent's is not that parent's gap. Forces: classify, the known-keys rule in plan_roll.
+After classify(c, k, f) — rekey with a computed classification — rolling groups by k as by any coordinate
+component, and with f bound as the classifier for k a parent (k=v) expects exactly the children f assigns v:
+a subject whose k differs is not that parent's gap. A child carrying k=v that f would not assign v is
+Refuse(UNSUPPORTED_COMPOSITION): a mislabelled coordinate folds into nothing. Before classify, slice(c, k=v)
+is a Refuse: the absence of a key is not a value of it. Forces: classifiers on plan_roll, slice_refusal.
 """
 
 
@@ -163,7 +184,9 @@ boundary; every other layer exists to support them. Forces: Layer.is_served.
 """
 
 LAW_DEPENDS_ON_DERIVED = """
-Concept.depends_on == products_read(concept.term): the families its Ensure leaves read. Never declared.
+Concept.depends_on == products_read(concept.term) when the concept holds a term — a declaration that
+disagrees is a ValueError, never a second source of truth. A concept adopted without a term declares its
+dependencies, so check_layers applies to it too; binding its recipe as a term replaces the declaration.
 """
 
 LAW_LAYERS = """
@@ -177,14 +200,24 @@ concept.layer. Forces: Layer.may_depend_on inside the algebra.
 # ---------------------------------------------------------------------------
 
 LAW_BRIDGE_DENOMINATOR = """
-carrier_from_instances(expected, present).missing == coords(expected) − coords(present); a payload
-holding None for the field is an absent cell. An instance outside expected, or two at one
-coordinate, raises: a broken store, not a data condition.
+carrier_from_instances(expected, present).missing == coords(expected) − coords(present); a payload holding
+None for the field, or for any of an accumulator's columns, is an absent cell. An instance outside expected,
+or two at one coordinate, raises: a broken store, not a data condition.
+"""
+
+LAW_BRIDGE_ROUND_TRIP = """
+For every field role r and a carrier c whose tag matches r:
+    carrier_from_instances(ids, instances_from_carrier(c, spec=r), spec=r) == c   (cells up to rounding)
+— accumulators through the operator's storage columns and encode/decode, reports as REPORTED with the
+operator's class name, plain values as LEAF. A carrier whose tag does not match the declared role is
+Refuse(UNSUPPORTED_COMPOSITION) on the way in: the declaration the algebra will consult later may not lie.
 """
 
 LAW_PROVENANCE_IS_LEAVES = """
-sources(parent) == ∪ sources(present children); a leaf's sources are itself; shift keeps them;
-instances_from_carrier(...).lineage == the leaf identities' cache keys.
+sources(parent) == ∪ sources(present children); a leaf's source is itself under the family it was
+read from; classify, rekey and shift keep pointing at the stored leaves they moved; join unites both
+sides' sources; instances_from_carrier(...).lineage == the sources' cache keys, whatever families
+they came from. Sources are identities, not coordinates: after a join a coordinate names nothing.
 """
 
 
@@ -195,7 +228,9 @@ instances_from_carrier(...).lineage == the leaf identities' cache keys.
 LAW_KEY_DEVERSIONED = """
 Identity.cache_key depends on the product family and the coordinate only; minting or retiring a
 Concept revision changes no key. Under an interpreter's KeyScheme the key is byte-identical to
-the one that interpreter writes — including its all-or-none rule for classification suffixes.
+the one that interpreter writes — including its all-or-none rule for classification suffixes —
+and two coordinates that differ only by explicit neutral classifications are one identity: the
+bridge canonicalizes both the expected set and the instances before it matches them.
 """
 
 
@@ -226,11 +261,19 @@ A None slot disables its gate. Freshness and lineage are never conflated.
 
 
 # ---------------------------------------------------------------------------
-# Interpreter contracts — stated here, tested by the interpreter
+# Interpreter contracts — executable against agent_neo.a3.reference; a binding conforms when they pass against its store
 # ---------------------------------------------------------------------------
 
 LAW_ENSURE_IDEMPOTENT = """
-ensure(ask) twice with unchanged inputs and a SERVE verdict returns the same instances and mints nothing.
+ensure(ask) twice with unchanged inputs and a SERVE verdict returns the same instances and mints nothing:
+the store's history at every identity is unchanged by the second call.
+"""
+
+LAW_ENSURE_RECURSIVE = """
+Reading a leaf is ensuring it: evaluate(Ensure(ask)) under a bound Env.ensure produces or refuses the
+upstream by the same path that serves it, so ensure(view) leaves every product under the view current.
+A recipe is relative to the ask it serves — its leaves derive their asks from Env.ask — and still
+declares statically what it reads (products_read is defined on AskFrom as on Ask).
 """
 
 LAW_RETIRE_NOT_MUTATE = """
@@ -240,7 +283,9 @@ currently makes it refresh in place instead — a known divergence recorded in S
 """
 
 LAW_REDO_DERIVED = """
-An instance is recomputed iff gate() says RECOMPUTE. Ask carries no field that forces it.
+An instance is recomputed iff gate() says RECOMPUTE. Ask carries no field that forces it. Invalidating
+an upstream makes every dependent recompute on its next ensure even when nothing flagged the dependent:
+the gate reads the upstream's flag through the refreshed lineage refs (cascade is an optimisation).
 """
 
 

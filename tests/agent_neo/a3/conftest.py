@@ -38,8 +38,16 @@ def overlapping_space() -> MappingLattice:
     ))
 
 
+FAMILY = 'zone_temp'  # the family every toy leaf carrier is read from
+
+
 def coord(zone: str, hour: str, **classifications: str) -> Coordinate:
     return Coordinate('site', 'zone', zone, 'hourly', hour, classifications)
+
+
+def src(zone: str, hour: str, **classifications: str) -> Identity:
+    """The stored leaf a toy cell came from: provenance is identities, not coordinates."""
+    return Identity(FAMILY, coord(zone, hour, **classifications))
 
 
 def leaves(seed: int = 0, *, zones=tuple(ZONES_BY_FLOOR), hours=tuple(HOURS_BY_DAY), shift: bool = False) -> Carrier[float]:
@@ -50,7 +58,7 @@ def leaves(seed: int = 0, *, zones=tuple(ZONES_BY_FLOOR), hours=tuple(HOURS_BY_D
         for h in hours:
             cls = {'shift': shift_of_hour(h)} if shift else {}
             cells[coord(z, h, **cls)] = round(rng.uniform(1, 100), 3)
-    return Carrier.of(cells)
+    return Carrier.of(cells, family=FAMILY)
 
 
 def shift_of_hour(hour: str) -> str:

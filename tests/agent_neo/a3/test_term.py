@@ -10,6 +10,7 @@ import pytest
 
 from agent_neo.a3 import (
     Ask,
+    AskFrom,
     Carrier,
     Classify,
     Concept,
@@ -32,7 +33,6 @@ from agent_neo.a3 import (
     Refuse,
     RefuseReason,
     Rekey,
-    Relift,
     Restrict,
     Roll,
     Shape,
@@ -43,10 +43,12 @@ from agent_neo.a3 import (
     check_layers,
     evaluate,
     instances_from_carrier,
+    leaf_ask,
     products_read,
     servable,
     shape,
 )
+from agent_neo.a3.term import leaves as term_leaves
 from tests.agent_neo.a3.conftest import (
     DictStore,
     ToyResolver,
@@ -72,7 +74,8 @@ def world(space, time):
     concepts = {'zone_temp': Concept('zone_temp', 'r1', Layer.FACT, fields={'temp': Field(FieldRole.LEAF)})}
     env = Env(
         operators=_registry(), lattices={'space': space, 'time': time}, resolver=ToyResolver(), store=DictStore(instances),
-        concepts=concepts, functions={'shift_of_hour': lambda c: shift_of_hour(c.period_anchor), 'is_z1': lambda c: c.subject_key == 'z1',
+        concepts=concepts, classifiers={'shift': 'shift_of_hour'},
+        functions={'shift_of_hour': lambda c: shift_of_hour(c.period_anchor), 'is_z1': lambda c: c.subject_key == 'z1',
                                        'next_hour': {'h1': 'h2', 'h2': 'h3', 'h3': 'h4', 'h4': 'h5'}.__getitem__, 'half': lambda v: v / 2,
                                        'to_h1': lambda k: 'h1', 'swap_z1_z2': lambda c: c.moved(Dimension.SUBJECT, 'zone', {'z1': 'z2', 'z2': 'z1'}.get(c.subject_key, c.subject_key))},
     )
@@ -83,8 +86,8 @@ ASK_ALL_ZONES_HOURLY = Ask('zone_temp', 'site', 'zone', None, 'hourly')
 
 CLASSIFIED = Classify(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean'), 'shift', 'shift_of_hour')
 ROLLED = Roll(Roll(CLASSIFIED, Dimension.SUBJECT, 'floor', 'space'), Dimension.PERIOD, 'daily', 'time')
-HEADLINE = Lower(Slice(ROLLED, (('shift', 'day'),)))  # roll first, slice after: LAW_SLICE_COMMUTES_WITH_ROLL's hypothesis
-NAIVE = Lower(Roll(Roll(Slice(CLASSIFIED, (('shift', 'day'),)), Dimension.SUBJECT, 'floor', 'space'), Dimension.PERIOD, 'daily', 'time'))
+HEADLINE = Lower(Slice(ROLLED, (('shift', 'day'),)))  # roll first, slice after
+NAIVE = Lower(Roll(Roll(Slice(CLASSIFIED, (('shift', 'day'),)), Dimension.SUBJECT, 'floor', 'space'), Dimension.PERIOD, 'daily', 'time'))  # slice first
 
 
 def _agree(term, env) -> tuple[Shape | Refuse, Carrier | Refuse]:
@@ -99,14 +102,18 @@ def _agree(term, env) -> tuple[Shape | Refuse, Carrier | Refuse]:
 
 def test_headline_mean_temperature_per_floor_per_day_day_shift(world) -> None:
     temps, env = world
-    # Slicing the shift away before rolling along the hour makes h2 (a night hour) look like a gap in d1:
-    naive, _ = _agree(NAIVE, env)
-    assert isinstance(naive, Refuse) and naive.reason is RefuseReason.INCOMPLETE_PARTITION and naive.context['parent'].period_anchor == 'd1'
+    # LAW_SLICE_COMMUTES_WITH_ROLL: with the shift classifier bound, slicing before or after the rolls is the same plan ...
+    _, naive = _agree(NAIVE, env)
     _, result = _agree(HEADLINE, env)
-    assert isinstance(result, Carrier)
+    assert isinstance(result, Carrier) and isinstance(naive, Carrier) and naive.cells == result.cells and naive.expected == result.expected
+    # ... and without it, rolling along the hour cannot know h2 (a night hour) is not a missing day hour: both orders refuse
+    unbound = replace(env, classifiers={})
+    for term in (NAIVE, HEADLINE):
+        refused, _ = _agree(term, unbound)
+        assert isinstance(refused, Refuse) and refused.reason is RefuseReason.INCOMPLETE_PARTITION
     f1d1 = Coordinate('site', 'floor', 'f1', 'daily', 'd1', {'shift': 'day'})
     assert result.cells[f1d1] == pytest.approx((temps.cells[coord('z1', 'h1')] + temps.cells[coord('z2', 'h1')]) / 2)  # h1 is d1's only day hour
-    assert result.sources(f1d1) == {coord('z1', 'h1', shift='day'), coord('z2', 'h1', shift='day')}
+    assert result.sources(f1d1) == {Identity('zone_temp', coord('z1', 'h1')), Identity('zone_temp', coord('z2', 'h1'))}  # the stored leaves, unclassified
     assert result.lowered_from == ('Mean',) and len(result) == 4  # 2 floors × 2 days, day shift
 
 
@@ -124,13 +131,15 @@ def test_law_depends_on_derived_and_layers_checked(world) -> None:
 def test_a_stored_report_cannot_be_re_averaged_but_a_stored_accumulator_can_be_rolled_further(world, space) -> None:
     _, env = world
     per_floor_acc = evaluate(Roll(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean'), Dimension.SUBJECT, 'floor', 'space'), env)
-    stored_acc = instances_from_carrier(per_floor_acc, product='floor_acc', computed_at=NOW, computed_by='r1', field='acc', source_product='zone_temp')
+    acc_spec, rep_spec = Field(FieldRole.ACCUMULATOR, 'mean', columns=('avg', 'n')), Field(FieldRole.REPORTED, 'mean')
+    stored_acc = instances_from_carrier(per_floor_acc, product='floor_acc', computed_at=NOW, computed_by='r1', field='acc', spec=acc_spec, operators=env.operators)
     stored_rep = instances_from_carrier(evaluate(Lower(Roll(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean'), Dimension.SUBJECT, 'floor', 'space')), env),
-                                        product='floor_temp', computed_at=NOW, computed_by='r1', field='temp', source_product='zone_temp')
+                                        product='floor_temp', computed_at=NOW, computed_by='r1', field='temp', spec=rep_spec, operators=env.operators)
+    assert set(stored_acc[0].payload) == {'avg', 'n'}  # the accumulator is stored in its declared columns, not as an object
     env2 = replace(env, store=DictStore(stored_acc + stored_rep), concepts={
         **env.concepts,
-        'floor_acc': Concept('floor_acc', 'r1', Layer.METRIC, fields={'acc': Field(FieldRole.ACCUMULATOR, 'mean')}),
-        'floor_temp': Concept('floor_temp', 'r1', Layer.METRIC, fields={'temp': Field(FieldRole.REPORTED, 'mean')}),
+        'floor_acc': Concept('floor_acc', 'r1', Layer.METRIC, fields={'acc': acc_spec}),
+        'floor_temp': Concept('floor_temp', 'r1', Layer.METRIC, fields={'temp': rep_spec}),
     })
     floors = Ask('floor_temp', 'site', 'floor', None, 'hourly')
     s, _ = _agree(Lift(Ensure(floors, 'temp'), 'mean'), env2)
@@ -146,13 +155,11 @@ def test_a_stored_report_cannot_be_re_averaged_but_a_stored_accumulator_can_be_r
     ('lower values', Lower(Ensure(ASK_ALL_ZONES_HOURLY, 'temp')), RefuseReason.UNSUPPORTED_COMPOSITION),
     ('map accumulators', Map(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean'), 'half'), RefuseReason.UNSUPPORTED_COMPOSITION),
     ('join accumulators', Join(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean'), Ensure(ASK_ALL_ZONES_HOURLY, 'temp')), RefuseReason.UNSUPPORTED_COMPOSITION),
-    ('lift lowered', Lift(Lower(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean')), 'sum'), RefuseReason.ILL_TYPED_ROLL),
+    ('mean of means', Lift(Lower(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean')), 'mean'), RefuseReason.ILL_TYPED_ROLL),
     ('partial sum', Roll(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'sum'), Dimension.SUBJECT, 'floor', 'space', OnMissing.PARTIAL), RefuseReason.INCOMPLETE_PARTITION),
     ('mixed levels', Roll(Roll(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'sum'), Dimension.SUBJECT, 'floor', 'space'), Dimension.SUBJECT, 'campus', 'space'), RefuseReason.UNSUPPORTED_COMPOSITION),
     ('classify twice', Classify(Classify(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'shift', 'shift_of_hour'), 'shift', 'shift_of_hour'), RefuseReason.UNSUPPORTED_COMPOSITION),
     ('non-injective shift', Shift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), Dimension.PERIOD, 'to_h1'), RefuseReason.UNSUPPORTED_COMPOSITION),
-    ('relift a mean', Relift(Lower(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean')), 'mean'), RefuseReason.ILL_TYPED_ROLL),
-    ('relift leaves', Relift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'sum'), RefuseReason.ILL_TYPED_ROLL),
 ])
 def test_law_shape_sound_every_refusal_is_decided_without_a_payload(world, name, term, reason) -> None:
     _, env = world
@@ -175,18 +182,20 @@ def test_law_shape_sound_on_lawful_terms(world) -> None:
         assert isinstance(s, Shape) and isinstance(e, Carrier)
 
 
-def test_law_distributive_relift_a_stored_sum_of_sums_is_a_sum(world, space) -> None:
+def test_law_reported_reentry_a_stored_sum_of_sums_is_a_sum_and_a_mean_of_sums_is_a_mean(world, space) -> None:
     _, env = world
     floor_sums = evaluate(Lower(Roll(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'sum'), Dimension.SUBJECT, 'floor', 'space')), env)
-    stored = instances_from_carrier(floor_sums, product='floor_sum', computed_at=NOW, computed_by='r1', field='total', source_product='zone_temp')
-    env2 = replace(env, store=DictStore(stored), concepts={**env.concepts, 'floor_sum': Concept('floor_sum', 'r1', Layer.METRIC, fields={'total': Field(FieldRole.REPORTED, 'sum')})})
-    from_stored = Lower(Roll(Relift(Ensure(Ask('floor_sum', 'site', 'floor', None, 'hourly'), 'total'), 'sum'), Dimension.SUBJECT, 'building', 'space'))
+    spec = Field(FieldRole.REPORTED, 'sum')
+    stored = instances_from_carrier(floor_sums, product='floor_sum', computed_at=NOW, computed_by='r1', field='total', spec=spec, operators=env.operators)
+    env2 = replace(env, store=DictStore(stored), concepts={**env.concepts, 'floor_sum': Concept('floor_sum', 'r1', Layer.METRIC, fields={'total': spec})})
+    from_stored = Lower(Roll(Lift(Ensure(Ask('floor_sum', 'site', 'floor', None, 'hourly'), 'total'), 'sum'), Dimension.SUBJECT, 'building', 'space'))
+    mean_of_sums = Lower(Roll(Lift(Ensure(Ask('floor_sum', 'site', 'floor', None, 'hourly'), 'total'), 'mean'), Dimension.SUBJECT, 'building', 'space'))
+    assert isinstance(_agree(mean_of_sums, env2)[0], Shape)  # the mean floor total: a different unit of analysis, lawful
     s, e = _agree(from_stored, env2)
     assert isinstance(s, Shape)
     from_leaves = evaluate(Lower(Roll(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'sum'), Dimension.SUBJECT, 'building', 'space')), env)
     b1h1 = Coordinate('site', 'building', 'b1', 'hourly', 'h1')
-    assert e.cells[b1h1] == pytest.approx(from_leaves.cells[b1h1])
-    assert isinstance(_agree(Lift(Ensure(Ask('floor_sum', 'site', 'floor', None, 'hourly'), 'total'), 'sum'), env2)[0], Refuse)  # plain lift still refuses
+    assert e.cells[b1h1] == pytest.approx(from_leaves.cells[b1h1]) and e.lowered_from == ('Sum', 'Sum')
 
 
 def test_rekey_moves_accumulators_too_and_join_keeps_one_sided_gaps(world) -> None:
@@ -248,3 +257,25 @@ def test_rolled_parents_are_gated_for_maturity_in_shape_and_evaluation(world) ->
     only_d1 = Roll(Lift(Ensure(Ask('zone_temp', 'site', 'zone', None, 'hourly', 'h1', 'h2'), 'temp'), 'sum'), Dimension.PERIOD, 'daily', 'time')
     s1, e1 = _agree(only_d1, gated)
     assert isinstance(s1, Shape) and {c.period_anchor for c in e1.cells} == {'d1'}
+
+
+def test_a_slice_on_an_uncarried_classification_is_refused_by_shape_and_evaluate_alike(world) -> None:
+    _, env = world
+    refused, _ = _agree(Slice(Lift(Ensure(ASK_ALL_ZONES_HOURLY, 'temp'), 'mean'), (('shift', 'day'),)), env)
+    assert isinstance(refused, Refuse) and refused.reason is RefuseReason.UNSUPPORTED_COMPOSITION
+
+
+def test_law_ensure_recursive_relative_leaves_read_a_static_product(world) -> None:
+    _, env = world
+    relative = Lower(Roll(Lift(Ensure(AskFrom('zone_temp', 'zones_of'), 'temp'), 'mean'), Dimension.SUBJECT, 'floor', 'space'))
+    assert products_read(relative) == {'zone_temp'} and [leaf.ask.product for leaf in term_leaves(relative)] == ['zone_temp']
+    zones_of = lambda ask: Ask('zone_temp', ask.scope_name, 'zone', None, ask.temporal_granularity, ask.local_period_start, ask.local_period_end)
+    served = Ask('floor_temp', 'site', 'floor', 'f1', 'hourly', 'h1', 'h1')
+    bound = replace(env, functions={**env.functions, 'zones_of': zones_of, 'wrong': lambda ask: replace(ask, product='floor_temp')}, ask=served)
+    assert leaf_ask(term_leaves(relative)[0], bound) == Ask('zone_temp', 'site', 'zone', None, 'hourly', 'h1', 'h1')
+    result = evaluate(relative, bound)
+    assert isinstance(result, Carrier) and {c.subject_key for c in result.cells} == {'f1', 'f2'} and {c.period_anchor for c in result.cells} == {'h1'}
+    with pytest.raises(KeyError):  # relative to nothing
+        leaf_ask(term_leaves(relative)[0], env)
+    with pytest.raises(ValueError):  # the derived ask must read the product the leaf declares
+        leaf_ask(Ensure(AskFrom('zone_temp', 'wrong'), 'temp'), bound)

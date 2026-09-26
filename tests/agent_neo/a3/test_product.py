@@ -80,11 +80,25 @@ def test_field_roles_must_be_consistent_with_an_operator() -> None:
         Field(FieldRole.REPORTED)
 
 
-def test_concept_key_family_and_fields() -> None:
-    c = Concept('usage', 'r2', Layer.METRIC, fields={'usage': Field(FieldRole.LEAF), 'usage_acc': Field(FieldRole.ACCUMULATOR, 'sum')})
-    assert c.key == 'usage@r2' and c.depends_on == frozenset() and c.field('usage_acc').operator == 'sum'
+def test_concept_fields_and_law_depends_on_derived() -> None:
+    c = Concept('usage', 'usage@r2', Layer.METRIC, fields={'usage': Field(FieldRole.LEAF), 'usage_acc': Field(FieldRole.ACCUMULATOR, 'sum')})
+    assert c.depends_on == frozenset() and c.field('usage_acc').operator == 'sum'
     with pytest.raises(KeyError):
         c.field('nope')
+
+    class _Reads:
+        def products_read(self) -> frozenset[str]:
+            return frozenset({'meter'})
+
+    derived = Concept('usage', 'r3', Layer.METRIC, term=_Reads())
+    assert derived.depends_on == {'meter'}
+    assert Concept('usage', 'r3', Layer.METRIC, term=_Reads(), depends_on={'meter'}).depends_on == {'meter'}  # agreeing declaration: fine
+    with pytest.raises(ValueError):  # a disagreeing declaration is never a second truth
+        Concept('usage', 'r3', Layer.METRIC, term=_Reads(), depends_on={'other_meter'})
+    adopted = Concept('legacy', 'Legacy|zone|daily|v1', Layer.METRIC, depends_on={'meter'})  # recipe still in interpreter code
+    assert adopted.depends_on == frozenset({'meter'}) and adopted.term is None
+    with pytest.raises(ValueError):
+        Field(FieldRole.REPORTED, 'mean', columns=('a', 'b'))  # only accumulators live in columns
 
 
 def test_ask_may_name_every_subject_of_a_kind() -> None:
@@ -131,3 +145,29 @@ def test_unknown_classifications_follow_the_scheme_in_name_order() -> None:
     assert identity.cache_key(INTERPRETER_SCHEME) == 'P|scope|zone=z1|daily|2026-05-01|d=weekday|h=all|shift=day'
     assert identity.cache_key() == 'P|scope|zone=z1|daily|2026-05-01|day_classif=weekday|shift=day'
     assert Identity('P', _coord()).cache_key() == Identity('P', _coord()).cache_key(INTERPRETER_SCHEME) == 'P|scope|zone=z1|daily|2026-05-01'
+
+
+GOLDEN_KEYS = {  # literal keys the interpreter has persisted: a delegation of build_cache_key to Identity.cache_key must not move them
+    ('hourly', '2026-05-06T09:00', (), ): 'P|s|zone=z1|hourly|2026-05-06T09:00',
+    ('hourly', '2026-05-06T09:00', (('day_classif', 'weekday'),)): 'P|s|zone=z1|hourly|2026-05-06T09:00|d=weekday|h=all',
+    ('daily', '2026-05-06', (('hour_classif', 'operating'),)): 'P|s|zone=z1|daily|2026-05-06|d=all|h=operating',
+    ('daily', '2026-05-06', (('day_classif', 'all'), ('hour_classif', 'all'))): 'P|s|zone=z1|daily|2026-05-06',
+    ('weekly', '2025-W01', ()): 'P|s|zone=z1|weekly|2025-W01',  # 2024-12-30 lies in ISO week 1 of 2025
+    ('weekly', '2026-W53', (('day_classif', 'weekday'),)): 'P|s|zone=z1|weekly|2026-W53|d=weekday|h=all',  # 2027-01-03 lies in ISO week 53 of 2026
+    ('weekly', '2026-W19', (('day_classif', 'all'), ('hour_classif', 'operating'))): 'P|s|zone=z1|weekly|2026-W19|d=all|h=operating',
+    ('monthly', '2024-12', ()): 'P|s|zone=z1|monthly|2024-12',
+    ('monthly', '2027-01', (('day_classif', 'weekday'), ('hour_classif', 'operating'))): 'P|s|zone=z1|monthly|2027-01|d=weekday|h=operating',
+}
+
+
+@pytest.mark.parametrize(('granularity', 'anchor', 'classifications'), list(GOLDEN_KEYS), ids=lambda v: v if isinstance(v, str) else '+'.join(f'{k}={x}' for k, x in v) or 'unsliced')
+def test_golden_keys_are_literal_and_pinned(granularity: str, anchor: str, classifications) -> None:
+    identity = Identity('P', Coordinate('s', 'zone', 'z1', granularity, anchor, classifications))
+    assert identity.cache_key(INTERPRETER_SCHEME) == GOLDEN_KEYS[(granularity, anchor, classifications)]
+
+
+def test_golden_weekly_anchors_match_the_interpreters_calendar_at_iso_year_boundaries() -> None:
+    from agent_neo.util.datetime import period_anchor
+
+    assert period_anchor(temporal_granularity='weekly', local_period_start=datetime(2024, 12, 30, 9, tzinfo=UTC)) == '2025-W01'
+    assert period_anchor(temporal_granularity='weekly', local_period_start=datetime(2027, 1, 3, 9, tzinfo=UTC)) == '2026-W53'

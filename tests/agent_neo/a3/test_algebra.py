@@ -19,6 +19,7 @@ from agent_neo.a3 import (
     Identity,
     IllegalOperatorUse,
     Instance,
+    KeyScheme,
     Max,
     Mean,
     Min,
@@ -39,14 +40,25 @@ from agent_neo.a3 import (
     map_cells,
     rank,
     rekey,
-    relift,
     restrict,
     roll,
     scale,
     shift,
     slice_cells,
+    slice_refusal,
 )
-from tests.agent_neo.a3.conftest import ExactSketch, coord, leaves, shift_of_hour
+from tests.agent_neo.a3.conftest import (
+    FAMILY,
+    ExactSketch,
+    coord,
+    leaves,
+    shift_of_hour,
+    src,
+)
+
+REGISTRY = OperatorRegistry()
+for _name, _op in (('sum', Sum()), ('count', Count()), ('min', Min()), ('max', Max()), ('mean', Mean()), ('wmean', WeightedMean()), ('p50', Percentile(0.5, ExactSketch))):
+    REGISTRY.register(_name, _op)
 
 
 def _ok(result):
@@ -58,7 +70,7 @@ def _acc(carrier: Carrier[float], operator) -> Carrier:
     return _ok(lift(carrier, operator))
 
 
-def _same(a: Carrier, b: Carrier) -> None:
+def _same(a: Carrier, b: Carrier, *, provenance: bool = True) -> None:
     assert a.expected == b.expected and set(a.cells) == set(b.cells)
     for c in a.cells:
         x, y = a.cells[c], b.cells[c]
@@ -68,7 +80,7 @@ def _same(a: Carrier, b: Carrier) -> None:
             assert sorted(x.values) == sorted(y.values)
         else:
             assert x == pytest.approx(y)
-        assert a.sources(c) == b.sources(c)
+        assert not provenance or a.sources(c) == b.sources(c)
 
 
 F1H1 = Coordinate('site', 'floor', 'f1', 'hourly', 'h1')
@@ -105,14 +117,14 @@ def test_law_tag_guards_fold(space) -> None:
     assert all(lowered.cells[c] == pytest.approx(values.cells[c]) for c in values.cells)
 
 
-def test_law_reported_never_lifted(space) -> None:
+def test_law_reported_reentry_refuses_a_mean_of_means(space) -> None:
     means = _ok(lower(_ok(roll(_acc(leaves(), Mean()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space))))
     again = lift(means, Mean())  # a mean of means, refused at the type level
-    assert again.reason is RefuseReason.ILL_TYPED_ROLL and 'reported values of Mean' in again.detail
-    assert lift(means, Sum()).reason is RefuseReason.ILL_TYPED_ROLL  # summing means is no better
+    assert again.reason is RefuseReason.ILL_TYPED_ROLL and 'a Mean of Means is not a Mean' in again.detail
+    assert _ok(lift(means, Sum())).lowered_from == ('Mean',)  # a sum of floor means is a different quantity, not a double application
     joined = _ok(join(_ok(scale(means, 2.0)), _ok(map_cells(means, abs))))
     assert joined.lowered_from == ('Sum',) or joined.lowered_from == ('Mean',)
-    assert lift(joined, WeightedMean()).reason is RefuseReason.ILL_TYPED_ROLL
+    assert _ok(lift(joined, WeightedMean())).lowered_from == ('Mean',)  # weighting reported means is a new quantity; the history rides along
 
 
 def test_law_holistic_needs_accumulator() -> None:
@@ -128,7 +140,7 @@ def test_law_holistic_needs_accumulator() -> None:
 def test_roll_folds_children_into_parents_with_provenance(space) -> None:
     floors = _ok(roll(_acc(leaves(), Sum()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space))
     assert floors.cells[F1H1] == pytest.approx(leaves().cells[coord('z1', 'h1')] + leaves().cells[coord('z2', 'h1')])
-    assert floors.sources(F1H1) == {coord('z1', 'h1'), coord('z2', 'h1')} and floors.coverage().complete and len(floors) == 8
+    assert floors.sources(F1H1) == {src('z1', 'h1'), src('z2', 'h1')} and floors.coverage().complete and len(floors) == 8
 
 
 def test_law_roll_requires_partition(space) -> None:
@@ -147,15 +159,15 @@ def test_law_partial_is_estimate(space) -> None:
     assert roll(_acc(partial, Sum()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space, on_missing=OnMissing.PARTIAL).reason is RefuseReason.INCOMPLETE_PARTITION
     est = _ok(roll(_acc(partial, Mean()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space, on_missing=OnMissing.PARTIAL))
     assert _ok(lower(est)).cells[F1H1] == pytest.approx(partial.cells[coord('z1', 'h1')])  # the one present zone
-    assert est.gaps[F1H1] == {coord('z2', 'h1')} and est.sources(F1H1) == {coord('z1', 'h1')}
+    assert est.gaps[F1H1] == {coord('z2', 'h1')} and est.sources(F1H1) == {src('z1', 'h1')}
 
 
 def test_law_roll_refuses_double_count(overlapping_space) -> None:
     acc = _acc(leaves(), Sum())
     refused = roll(acc, dimension=Dimension.SUBJECT, to_level='floor', lattice=overlapping_space)
-    assert isinstance(refused, Refuse) and refused.reason is RefuseReason.DOUBLE_COUNTED
-    lenient = _ok(roll(acc, dimension=Dimension.SUBJECT, to_level='floor', lattice=overlapping_space, on_missing=OnMissing.ABSENT))
-    assert len(lenient) == 0 and len(lenient.expected) == 8  # z2 touches both floors: every parent is tainted
+    assert isinstance(refused, Refuse) and refused.reason is RefuseReason.DOUBLE_COUNTED and refused.context['parents'] == {'f1', 'f2'}
+    for policy in (OnMissing.ABSENT, OnMissing.PARTIAL):  # a lattice that is not a partition is not missing data: no policy folds it
+        assert roll(_acc(leaves(), Mean()), dimension=Dimension.SUBJECT, to_level='floor', lattice=overlapping_space, on_missing=policy).reason is RefuseReason.DOUBLE_COUNTED
 
 
 def test_law_empty_fold_is_absent_for_every_operator(space) -> None:
@@ -200,11 +212,11 @@ def test_law_roll_dimension_commute(space, time, op, policy, zones) -> None:
         return
     _same(a, b)
     if zones == ('z1', 'z2', 'z3'):
-        assert a.sources(TOP) == set(leaves().cells) and _ok(lower(a)).cells[TOP] == pytest.approx(_ok(lower(b)).cells[TOP])
+        assert a.sources(TOP) == {Identity(FAMILY, c) for c in leaves().cells} and _ok(lower(a)).cells[TOP] == pytest.approx(_ok(lower(b)).cells[TOP])
     elif policy is OnMissing.ABSENT:
         assert a.get(TOP) is ABSENT  # one missing leaf makes the top absent, whichever way you roll
     else:
-        assert a.sources(TOP) == set(leaves(zones=zones).cells)  # a partial estimate over exactly the present leaves
+        assert a.sources(TOP) == {Identity(FAMILY, c) for c in leaves(zones=zones).cells}  # a partial estimate over exactly the present leaves
 
 
 def test_weighted_mean_rolls_as_a_true_weighted_mean(space) -> None:
@@ -225,13 +237,21 @@ def test_law_classify_is_key_when_the_classification_varies_across_a_parents_chi
     # z2 works the night shift at h1 while z1 and z3 work days: a per-shift floor total must not call z2 a gap
     assign = lambda c: 'night' if (c.subject_key, c.period_anchor) == ('z2', 'h1') else shift_of_hour(c.period_anchor)
     acc = _ok(classify(_acc(leaves(), Sum()), 'shift', assign))
-    floors = _ok(roll(acc, dimension=Dimension.SUBJECT, to_level='floor', lattice=space))  # REFUSE policy, and it succeeds
+    bound = {'shift': assign}
+    floors = _ok(roll(acc, dimension=Dimension.SUBJECT, to_level='floor', lattice=space, classifiers=bound))  # REFUSE policy, and it succeeds
     day, night = F1H1.with_classifications(shift='day'), F1H1.with_classifications(shift='night')
-    assert floors.cells[day] == pytest.approx(leaves().cells[coord('z1', 'h1')]) and floors.sources(day) == {coord('z1', 'h1', shift='day')}
+    assert floors.cells[day] == pytest.approx(leaves().cells[coord('z1', 'h1')]) and floors.sources(day) == {src('z1', 'h1')}  # the stored leaf, unclassified
     assert floors.cells[night] == pytest.approx(leaves().cells[coord('z2', 'h1')])
-    # slicing first throws the sibling classification away, so the same roll now sees a gap: roll first, slice after
+    # without the classifier the roll cannot know that (z2, h1, day) does not exist: it refuses rather than guesses, in either order
+    assert roll(acc, dimension=Dimension.SUBJECT, to_level='floor', lattice=space).reason is RefuseReason.INCOMPLETE_PARTITION
     assert roll(slice_cells(acc, shift='day'), dimension=Dimension.SUBJECT, to_level='floor', lattice=space).reason is RefuseReason.INCOMPLETE_PARTITION
+    # with it, the denominator is intrinsic and slicing commutes with rolling
+    _same(_ok(roll(slice_cells(acc, shift='day'), dimension=Dimension.SUBJECT, to_level='floor', lattice=space, classifiers=bound)), _ok(slice_cells(floors, shift='day')))
     assert classify(acc, 'shift', assign).reason is RefuseReason.UNSUPPORTED_COMPOSITION  # already classified
+    # a coordinate that carries a value the classifier would not assign it folds into nothing
+    mislabelled = _ok(classify(_acc(leaves(), Sum()), 'shift', lambda c: 'day'))
+    refused = roll(mislabelled, dimension=Dimension.SUBJECT, to_level='floor', lattice=space, classifiers={'shift': lambda c: shift_of_hour(c.period_anchor)})
+    assert refused.reason is RefuseReason.UNSUPPORTED_COMPOSITION and refused.context['classification'] == 'shift'
 
 
 # ---------------------------------------------------------------------------
@@ -259,30 +279,41 @@ def test_law_shift_aligns_a_baseline_for_period_over_period() -> None:
     d = _ok(diff(this, moved))
     assert d.cells[coord('z1', 'h2')] == pytest.approx(this.cells[coord('z1', 'h2')] - last.cells[coord('z1', 'h1')])
     assert {coord('z1', 'h1'), coord('z1', 'h5')} <= d.missing  # no baseline for h1, nothing to compare at h5: gaps of the join, still visible
-    assert moved.sources(coord('z1', 'h2')) == {coord('z1', 'h1')}  # provenance points at where the value really came from
+    assert moved.sources(coord('z1', 'h2')) == {src('z1', 'h1')}  # provenance points at where the value really came from
     assert shift(last, Dimension.PERIOD, lambda k: 'h1').reason is RefuseReason.UNSUPPORTED_COMPOSITION  # not injective
 
 
-def test_law_distributive_relift(space) -> None:
-    acc = _acc(leaves(), Sum())
-    floor_sums = _ok(lower(_ok(roll(acc, dimension=Dimension.SUBJECT, to_level='floor', lattice=space))))
-    assert lift(floor_sums, Sum()).reason is RefuseReason.ILL_TYPED_ROLL  # lift never re-enters a fold
-    again = _ok(relift(floor_sums, Sum()))
-    building = _ok(lower(_ok(roll(again, dimension=Dimension.SUBJECT, to_level='building', lattice=space))))
-    direct = _ok(lower(_ok(roll(acc, dimension=Dimension.SUBJECT, to_level='building', lattice=space))))
-    _same(building, direct)
-    counts = _ok(lower(_ok(roll(_acc(leaves(), Count()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space))))
-    assert _ok(lower(_ok(roll(_ok(relift(counts, Count())), dimension=Dimension.SUBJECT, to_level='building', lattice=space)))).cells[Coordinate('site', 'building', 'b1', 'hourly', 'h1')] == 3
-    means = _ok(lower(_ok(roll(_acc(leaves(), Mean()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space))))
-    assert relift(means, Mean()).reason is RefuseReason.ILL_TYPED_ROLL  # algebraic: the count is gone
-    assert relift(floor_sums, Max()).reason is RefuseReason.ILL_TYPED_ROLL  # someone else's output
-    assert relift(leaves(), Sum()).reason is RefuseReason.ILL_TYPED_ROLL  # leaves enter with lift
+def test_law_reported_reentry(space, time) -> None:
+    def floors(op):
+        return _ok(lower(_ok(roll(_acc(leaves(), op), dimension=Dimension.SUBJECT, to_level='floor', lattice=space))))
+
+    # refused: an inexact operator over its own reports
+    for op in (Mean(), Count(), Percentile(0.5, ExactSketch)):
+        assert lift(floors(op), op).reason is RefuseReason.ILL_TYPED_ROLL, op
+    # allowed and equal to rolling further: an exact operator over its own reports
+    for op in (Sum(), Max(), Min()):
+        via_reports = _ok(lower(_ok(roll(_ok(lift(floors(op), op)), dimension=Dimension.SUBJECT, to_level='building', lattice=space))))
+        direct = _ok(lower(_ok(roll(_acc(leaves(), op), dimension=Dimension.SUBJECT, to_level='building', lattice=space))))
+        _same(via_reports, direct)
+        assert via_reports.lowered_from == (type(op).__name__, type(op).__name__)  # the history is kept, not cleared
+    # allowed: a change of unit of analysis — the mean of daily totals, the maximum of daily means
+    daily_totals = _ok(lower(_ok(roll(_acc(leaves(), Sum()), dimension=Dimension.PERIOD, to_level='daily', lattice=time))))
+    mean_daily_total = _ok(lower(_ok(roll(_ok(lift(daily_totals, Mean())), dimension=Dimension.PERIOD, to_level='monthly', lattice=time))))
+    z1m1 = Coordinate('site', 'zone', 'z1', 'monthly', 'm1')
+    assert mean_daily_total.cells[z1m1] == pytest.approx(sum(leaves().cells[coord('z1', h)] for h in ('h1', 'h2', 'h3', 'h4')) / 2)
+    assert mean_daily_total.lowered_from == ('Sum', 'Mean') and lift(mean_daily_total, Mean()).reason is RefuseReason.ILL_TYPED_ROLL
+    assert isinstance(lift(floors(Mean()), Max()), Carrier)
+    # allowed: the correct weighted reconstruction from a stored (mean, count) pair equals the mean over leaves
+    means, counts = floors(Mean()), floors(Count())
+    rebuilt = _ok(lower(_ok(roll(_ok(lift(_ok(join(means, counts)), WeightedMean())), dimension=Dimension.SUBJECT, to_level='building', lattice=space))))
+    over_leaves = _ok(lower(_ok(roll(_acc(leaves(), Mean()), dimension=Dimension.SUBJECT, to_level='building', lattice=space))))
+    _same(rebuilt, over_leaves)
 
 
 def test_rekey_is_a_functor_and_lift_rejects_wrong_value_types(space) -> None:
     acc = _acc(leaves(), Sum())
     swapped = _ok(rekey(acc, lambda c: c.moved(Dimension.SUBJECT, 'zone', {'z1': 'z2', 'z2': 'z1', 'z3': 'z3'}[c.subject_key])))
-    assert swapped.operator == Sum() and swapped.cells[coord('z1', 'h1')] == acc.cells[coord('z2', 'h1')] and swapped.sources(coord('z1', 'h1')) == {coord('z2', 'h1')}
+    assert swapped.operator == Sum() and swapped.cells[coord('z1', 'h1')] == acc.cells[coord('z2', 'h1')] and swapped.sources(coord('z1', 'h1')) == {src('z2', 'h1')}
     assert rekey(acc, lambda c: coord('z1', 'h1')).reason is RefuseReason.UNSUPPORTED_COMPOSITION
     with pytest.raises(IllegalOperatorUse):
         lift(_ok(join(leaves(), leaves())), Sum())  # pairs into Sum: a plan-authoring error, raised, never a concatenation
@@ -316,7 +347,7 @@ def test_law_bridge_denominator_and_provenance_is_leaves(space) -> None:
     with pytest.raises(ValueError):
         carrier_from_instances(expected[:1], present, field='usage', spec=Field(FieldRole.LEAF))
     floors = _ok(lower(_ok(roll(_acc(c, Sum()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space, on_missing=OnMissing.ABSENT))))
-    out = {i.identity.cache_key(): i for i in instances_from_carrier(floors, product='floor_usage', computed_at=now, computed_by='floor_usage@r1', field='usage', source_product='usage')}
+    out = {i.identity.cache_key(): i for i in instances_from_carrier(floors, product='floor_usage', computed_at=now, computed_by='floor_usage@r1', field='usage', spec=Field(FieldRole.REPORTED, 'sum'), operators=REGISTRY)}
     f2h1 = out['floor_usage|site|floor=f2|hourly|h1']
     assert tuple(r.key for r in f2h1.lineage) == ('usage|site|zone=z3|hourly|h1',) and f2h1.payload == {'usage': leaves().cells[coord('z3', 'h1')]}
     assert 'floor_usage|site|floor=f1|hourly|h1' not in out  # incomplete: absent, never persisted as zero
@@ -324,15 +355,119 @@ def test_law_bridge_denominator_and_provenance_is_leaves(space) -> None:
 
 def test_bridge_tags_stored_accumulators_and_marks_stored_reports(space) -> None:
     now = datetime(2026, 5, 2, tzinfo=UTC)
-    registry = OperatorRegistry()
-    registry.register('mean', Mean())
-    acc = _acc(leaves(), Mean())
-    stored = instances_from_carrier(acc, product='zone_temp_acc', computed_at=now, computed_by='r1', field='acc')
-    back = carrier_from_instances([i.identity for i in stored], stored, field='acc', spec=Field(FieldRole.ACCUMULATOR, 'mean'), operators=registry)
+    acc_field = Field(FieldRole.ACCUMULATOR, 'mean', columns=('average_temperature', 'source_hour_count'))  # what a store already holds
+    acc = _ok(roll(_acc(leaves(), Mean()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space))
+    stored = _ok(instances_from_carrier(acc, product='floor_temp', computed_at=now, computed_by='r1', field='acc', spec=acc_field, operators=REGISTRY))
+    assert set(stored[0].payload) == {'average_temperature', 'source_hour_count'} and stored[0].payload['source_hour_count'] == 2.0
+    back = carrier_from_instances([i.identity for i in stored], stored, field='acc', spec=acc_field, operators=REGISTRY)
     assert back.operator == Mean() and not back.is_values
-    _same(_ok(roll(back, dimension=Dimension.SUBJECT, to_level='floor', lattice=space)), _ok(roll(acc, dimension=Dimension.SUBJECT, to_level='floor', lattice=space)))
-    reported = instances_from_carrier(_ok(lower(acc)), product='zone_temp', computed_at=now, computed_by='r1', field='temp')
-    back_reported = carrier_from_instances([i.identity for i in reported], reported, field='temp', spec=Field(FieldRole.REPORTED, 'mean'))
-    assert back_reported.lowered_from == ('mean',) and lift(back_reported, Mean()).reason is RefuseReason.ILL_TYPED_ROLL
-    with pytest.raises(ValueError):
-        carrier_from_instances([i.identity for i in stored], stored, field='acc', spec=Field(FieldRole.ACCUMULATOR, 'mean'))
+    _same(back, acc, provenance=False)  # LAW_BRIDGE_ROUND_TRIP for an accumulator: the stored (mean, count) is the accumulator again; a re-read carrier's sources are the stored instances
+    _same(_ok(roll(back, dimension=Dimension.SUBJECT, to_level='building', lattice=space)), _ok(roll(acc, dimension=Dimension.SUBJECT, to_level='building', lattice=space)), provenance=False)
+    reported = _ok(instances_from_carrier(_ok(lower(acc)), product='floor_temp', computed_at=now, computed_by='r1', field='temp', spec=Field(FieldRole.REPORTED, 'mean'), operators=REGISTRY))
+    back_reported = carrier_from_instances([i.identity for i in reported], reported, field='temp', spec=Field(FieldRole.REPORTED, 'mean'), operators=REGISTRY)
+    assert back_reported.lowered_from == ('Mean',) and lift(back_reported, Mean()).reason is RefuseReason.ILL_TYPED_ROLL
+    _same(back_reported, _ok(lower(acc)), provenance=False)
+    plain = _ok(instances_from_carrier(leaves(), product='zone_temp', computed_at=now, computed_by='r1', field='temp', spec=Field(FieldRole.LEAF)))
+    _same(carrier_from_instances([i.identity for i in plain], plain, field='temp', spec=Field(FieldRole.LEAF)), leaves())
+    # the declaration the algebra will consult later may not lie about what was written
+    assert instances_from_carrier(acc, product='p', computed_at=now, computed_by='r1', field='f', spec=Field(FieldRole.REPORTED, 'mean'), operators=REGISTRY).reason is RefuseReason.UNSUPPORTED_COMPOSITION
+    assert instances_from_carrier(acc, product='p', computed_at=now, computed_by='r1', field='f', spec=Field(FieldRole.ACCUMULATOR, 'sum'), operators=REGISTRY).reason is RefuseReason.UNSUPPORTED_COMPOSITION
+    assert instances_from_carrier(_ok(lower(acc)), product='p', computed_at=now, computed_by='r1', field='f', spec=Field(FieldRole.LEAF)).reason is RefuseReason.UNSUPPORTED_COMPOSITION
+    assert instances_from_carrier(leaves(), product='p', computed_at=now, computed_by='r1', field='f', spec=Field(FieldRole.REPORTED, 'mean'), operators=REGISTRY).reason is RefuseReason.UNSUPPORTED_COMPOSITION
+    with pytest.raises(ValueError):  # a registry is required to name what was stored
+        carrier_from_instances([i.identity for i in stored], stored, field='acc', spec=acc_field)
+    with pytest.raises(ValueError):  # a two-column operator needs its columns declared
+        instances_from_carrier(acc, product='p', computed_at=now, computed_by='r1', field='acc', spec=Field(FieldRole.ACCUMULATOR, 'mean'), operators=REGISTRY)
+
+
+# ---------------------------------------------------------------------------
+# Closure over Carrier | Refuse; slice needs the key; provenance across families; canonical identity
+# ---------------------------------------------------------------------------
+
+
+def test_law_refuse_absorbs(space) -> None:
+    r1, r2 = Refuse(RefuseReason.INCOMPLETE_PARTITION, 'first'), Refuse(RefuseReason.DOUBLE_COUNTED, 'second')
+    unary = (
+        lambda c: lift(c, Sum()), lower,
+        lambda c: roll(c, dimension=Dimension.SUBJECT, to_level='floor', lattice=space),
+        lambda c: restrict(c, lambda _: True), lambda c: slice_cells(c, shift='day'), lambda c: classify(c, 'k', lambda _: 'v'),
+        lambda c: rekey(c, lambda x: x), lambda c: shift(c, Dimension.PERIOD, lambda k: k), lambda c: map_cells(c, lambda v: v),
+        lambda c: scale(c, 2.0), lambda c: rank(c),
+    )
+    for primitive in unary:
+        assert primitive(r1) is r1
+    for binary in (join, diff):
+        assert binary(r1, leaves()) is r1 and binary(leaves(), r1) is r1 and binary(r1, r2) is r1  # the left refusal wins
+    # so a composition needs no check between steps: the first refusal is the result
+    assert lower(roll(slice_cells(_acc(leaves(), Mean()), shift='day'), dimension=Dimension.SUBJECT, to_level='floor', lattice=space)).reason \
+        is RefuseReason.UNSUPPORTED_COMPOSITION
+
+
+def test_law_slice_on_an_uncarried_classification_is_refused_not_empty() -> None:
+    refused = slice_cells(leaves(), shift='day')  # nothing here carries a shift
+    assert refused.reason is RefuseReason.UNSUPPORTED_COMPOSITION and refused.context['classification'] == 'shift'
+    assert slice_refusal(leaves().expected, ['shift']) is not None and slice_refusal(leaves(shift=True).expected, ['shift']) is None
+    assert len(slice_cells(leaves(shift=True), shift='day')) == 6  # 3 zones × the 2 day hours
+    assert len(slice_cells(leaves(shift=True), shift='dawn')) == 0  # a carried key with no such value: legitimately empty
+
+
+def test_law_provenance_survives_join_and_classify_as_identities() -> None:
+    now = datetime(2026, 5, 2, tzinfo=UTC)
+    temps, areas = leaves(), Carrier.of({c: 10.0 for c in leaves().cells}, family='zone_area')
+    per_area = _ok(map_cells(_ok(join(temps, areas)), lambda pair: pair[0] / pair[1]))
+    z1h1 = coord('z1', 'h1')
+    assert per_area.sources(z1h1) == {Identity('zone_temp', z1h1), Identity('zone_area', z1h1)}
+    stored = {i.identity.coordinate: i for i in _ok(instances_from_carrier(per_area, product='temp_per_area', computed_at=now, computed_by='r1', field='v', spec=Field(FieldRole.LEAF)))}
+    assert tuple(r.key for r in stored[z1h1].lineage) == ('zone_area|site|zone=z1|hourly|h1', 'zone_temp|site|zone=z1|hourly|h1')
+    # classify moves the cell to a classified coordinate; its source is still the unclassified stored leaf
+    shifted = _ok(classify(temps, 'shift', lambda c: shift_of_hour(c.period_anchor)))
+    assert shifted.sources(coord('z1', 'h1', shift='day')) == {src('z1', 'h1')}
+    assert Carrier.of({z1h1: 1.0}).sources(z1h1) == frozenset()  # no family, no provenance: nothing is known
+
+
+def test_law_key_deversioned_canonical_identity_at_the_bridge() -> None:
+    now = datetime(2026, 5, 2, tzinfo=UTC)
+    scheme = KeyScheme(entries=(('day_classif', 'd', 'all'),))
+    asked = [Identity('usage', c) for c in leaves().cells]
+    written = [Instance(Identity('usage', c.with_classifications(day_classif='all')), {'usage': v}, now, 'r1') for c, v in leaves().cells.items()]
+    c = carrier_from_instances(asked, written, field='usage', spec=Field(FieldRole.LEAF), scheme=scheme)
+    assert c.coverage().complete and len(c) == 12 and c.family == 'usage'
+    with pytest.raises(ValueError):  # under the plain scheme the explicit neutral pair is a different coordinate
+        carrier_from_instances(asked, written, field='usage', spec=Field(FieldRole.LEAF))
+    with pytest.raises(ValueError):  # one carrier, one family
+        carrier_from_instances([*asked, Identity('other', coord('z1', 'h1'))], written, field='usage', spec=Field(FieldRole.LEAF), scheme=scheme)
+
+
+# ---------------------------------------------------------------------------
+# Path independence and gap propagation; undefined reports
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize('operator', [Sum(), Mean(), Min(), Percentile(0.5, ExactSketch)], ids=lambda o: type(o).__name__)
+@pytest.mark.parametrize('policy', list(OnMissing))
+@pytest.mark.parametrize('missing', [(), ('h2',)], ids=['complete', 'h2-missing'])
+def test_law_roll_path_independent(time, operator, policy, missing) -> None:
+    hours = tuple(h for h in ('h1', 'h2', 'h3', 'h4') if h not in missing)
+    acc = _acc(Carrier(leaves(hours=hours).cells, leaves().expected, family='zone_temp'), operator)  # h2 expected but absent
+    two_step = roll(roll(acc, dimension=Dimension.PERIOD, to_level='daily', lattice=time, on_missing=policy), dimension=Dimension.PERIOD, to_level='monthly', lattice=time, on_missing=policy)
+    one_step = roll(acc, dimension=Dimension.PERIOD, to_level='monthly', lattice=time, on_missing=policy)
+    if isinstance(one_step, Refuse):
+        assert isinstance(two_step, Refuse) and two_step.reason is one_step.reason
+        return
+    _same(two_step, one_step)
+    for c in one_step.expected:
+        assert two_step.sources(c) == one_step.sources(c) and two_step.gaps.get(c) == one_step.gaps.get(c)
+    z1m1 = Coordinate('site', 'zone', 'z1', 'monthly', 'm1')
+    if missing:
+        assert one_step.gaps[z1m1] == {coord('z1', 'h2')}  # the finest coordinate known to be missing, not the intermediate day
+        assert (z1m1 in one_step.cells) == (policy is OnMissing.PARTIAL)
+    else:
+        assert z1m1 not in one_step.gaps and z1m1 in one_step.cells
+
+
+def test_law_empty_fold_is_absent_an_undefined_report_is_a_missing_cell(space) -> None:
+    weighted = Carrier.of({coord('z1', 'h1'): (5.0, 0.0), coord('z2', 'h1'): (7.0, 2.0)}, family='w')  # z1 carries no weight
+    lowered = _ok(lower(_acc(weighted, WeightedMean())))
+    assert lowered.get(coord('z1', 'h1')) is ABSENT and lowered.missing == {coord('z1', 'h1')} and lowered.cells[coord('z2', 'h1')] == 7.0
+    absent_floor = _ok(roll(_acc(weighted, WeightedMean()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space, on_missing=OnMissing.PARTIAL))
+    assert _ok(lower(absent_floor)).cells[F1H1] == pytest.approx(7.0)  # the zero-weight child adds nothing, refuses nothing

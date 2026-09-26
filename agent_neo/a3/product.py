@@ -4,10 +4,11 @@
   product shares. Defined here, at the floor, and re-exported by the graph-bound interpreter
   under its historical names; the dependency runs interpreter → algebra, never the reverse.
 - :class:`Concept` — a *family* plus a *revision*. The family is the stable name a product
-  is known by (it goes in the key); the revision is the recipe that computed an instance (it
-  is what gets retired). A concept also declares what each payload field *is*
-  (:class:`Field`): a leaf observation, an operator's accumulator, or a reported value.
-  That declaration is what lets the bridge refuse to re-lift a stored mean.
+  is known by (it goes in the key); the revision is the store's own key for the recipe that
+  computed an instance (opaque here; it is what gets retired). A concept declares what each
+  payload field *is* (:class:`Field`): a leaf observation, an operator's accumulator held in
+  named columns, or a reported value. That declaration is what lets the bridge rebuild a
+  stored ``(mean, count)`` as a mean accumulator and refuse to re-average a stored mean.
 - :class:`Identity` — a family at a :class:`~agent_neo.a3.carrier.Coordinate`. Its
   ``cache_key`` is produced through a :class:`KeyScheme`, so the same identity can address
   nodes an interpreter wrote under its own conventions, byte for byte.
@@ -115,6 +116,7 @@ class RefuseReason(StrEnum):
     IMMATURE_WINDOW = 'immature_window'  # gate / term: the period has not settled
     LAYER_VIOLATION = 'layer_violation'  # check_layers: a concept reads a product above its own layer
     NOT_SERVABLE = 'not_servable'  # servable: only VIEW-layer products cross the serving boundary
+    NO_RECIPE = 'no_recipe'  # ensure: the identity is missing or invalid and its concept holds no term to compute it from
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,10 +207,16 @@ class FieldRole(StrEnum):
 class Field:
     role: FieldRole
     operator: str | None = None  # registry name, for ACCUMULATOR and REPORTED
+    #: for an ACCUMULATOR: the payload names holding the operator's storage columns, positionally
+    #: (``Mean.columns == ('mean', 'count')`` stored as ``('average_temperature', 'source_hour_count')``);
+    #: ``None`` means the field's own name, which suits a one-column operator
+    columns: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if (self.role is FieldRole.LEAF) == (self.operator is not None):
             raise ValueError('a LEAF field names no operator; ACCUMULATOR and REPORTED fields must name theirs')
+        if self.columns is not None and self.role is not FieldRole.ACCUMULATOR:
+            raise ValueError('only an ACCUMULATOR field is stored in columns')
 
 
 @runtime_checkable
@@ -221,8 +229,14 @@ class TermLike(Protocol):
 @dataclass(frozen=True, slots=True)
 class Concept:
     """A design-level recipe: the family it computes, the revision of the recipe, and the
-    shape of what it stores. ``depends_on`` is *derived* from the recipe's term when it has
-    one — the families the term reads — never hand-declared."""
+    shape of what it stores.
+
+    ``depends_on`` is *derived* from the recipe's term when it has one — the families the term
+    reads — and a declaration that disagrees is an error. A concept adopted without a term
+    (its recipe still lives in interpreter code) declares its dependencies, so the layer check
+    applies to it too. ``revision`` is the store's key for the recipe, verbatim: the same
+    string an :class:`Instance` records as ``computed_by``.
+    """
 
     family: str
     revision: str
@@ -230,18 +244,18 @@ class Concept:
     fields: tuple[tuple[str, Field], ...] = ()
     term: TermLike | None = None
     lifecycle: LifecycleStatus = LifecycleStatus.OFFICIAL
+    depends_on: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if isinstance(self.fields, Mapping):
             object.__setattr__(self, 'fields', tuple(sorted(self.fields.items())))
-
-    @property
-    def key(self) -> str:
-        return f'{self.family}@{self.revision}'
-
-    @property
-    def depends_on(self) -> frozenset[str]:
-        return self.term.products_read() if self.term is not None else frozenset()
+        declared = frozenset(self.depends_on)
+        if self.term is not None:
+            derived = frozenset(self.term.products_read())
+            if declared and declared != derived:
+                raise ValueError(f'{self.family!r} declares dependencies {sorted(declared)} but its term reads {sorted(derived)}')
+            declared = derived
+        object.__setattr__(self, 'depends_on', declared)
 
     def field(self, name: str) -> Field:
         for field_name, spec in self.fields:
@@ -285,15 +299,16 @@ class Instance:
 
     ``computed_at`` may be unknown for nodes written before it was recorded; the freshness
     gate treats unknown as stale when a bound is set. ``computed_by`` is the store's own key
-    for the recipe revision, opaque here; ``producing`` is that recipe's current lifecycle,
-    ``None`` when the store has no record of what produced the instance.
+    for the recipe revision (a :class:`Concept`'s ``revision``); ``producing`` is that recipe's
+    current lifecycle, and defaults to ``None`` — an instance whose recipe nobody looked up is
+    recomputed, not silently served as if its recipe were official.
     """
 
     identity: Identity
     payload: Mapping[str, Any]
     computed_at: datetime | None = None
     computed_by: str | None = None
-    producing: LifecycleStatus | None = LifecycleStatus.OFFICIAL
+    producing: LifecycleStatus | None = None
     lifecycle: LifecycleStatus = LifecycleStatus.OFFICIAL
     needs_redo: bool = False
     lineage: tuple[LineageRef, ...] = ()

@@ -4,16 +4,20 @@
 
 ### Status: v1 implemented and law-tested; not yet bound to the interpreter
 
-The algebra exists as code: a hashable coordinate space, a carrier with derived coverage
-and two type tags, nine primitive operations closed over it, factored operators with a
-Gray classification, a lattice slot, three gates, a bridge in both directions, and a term
-language with a shape checker that decides every refusal before a value is read. Thirty-one
-laws in `laws.py`, each executable in `tests/agent_neo/a3/`. Module map and the
-decision record: [`SKETCH.md`](SKETCH.md).
+The algebra exists as code: a hashable coordinate space, a carrier with derived coverage,
+two type tags and identity-valued provenance, seven primitive operations closed over
+`Carrier | Refuse`, factored operators with an exactness flag and a storage shape, a lattice
+slot, three gates, a bridge in both directions, a term language with a shape checker that
+decides every refusal before a value is read, and a reference interpreter over an in-memory
+store that is `ensure` written from those blocks alone. Thirty-five laws in `laws.py`, each
+executable in `tests/agent_neo/a3/` — the lifecycle contracts against the reference
+interpreter, which is also the conformance target for any storage binding. Module map, the
+decision record and the binding contract: [`SKETCH.md`](SKETCH.md).
 
 Not yet done: binding `agent_neo.analytical_product` to it (a `Resolver`, a `Store`, a
 calendar lattice, `Field` declarations on existing products). The shared enums and the key
-scheme are bound and tested; the rest is listed at the end of `SKETCH.md`.
+scheme are bound and tested; the binding contract — what a conformant binding must do, and
+the test file it must pass — is stated at the end of `SKETCH.md`.
 
 ### Design aspiration
 
@@ -239,18 +243,21 @@ notice.
 ```
 a3/
   carrier.py    Coordinate (two rollable Dimensions + classifications), Absent
-  algebra.py    Carrier (expected · operator tag · lowered_from · provenance · gaps)
-                lift relift roll restrict classify rekey map join lower | slice shift scale diff | rank | plan_roll
-  operators.py  Operator = lift/combine/lower + kind + partial_ok; Sum Count Min Max Mean WeightedMean
-                Proportion Percentile; OperatorRegistry
+  algebra.py    Carrier (expected · operator tag · lowered_from · provenance as identities · gaps · family)
+                lift roll restrict rekey map join lower | slice shift classify scale diff | rank | plan_roll
+                every primitive absorbs a Refuse
+  operators.py  Operator = lift/combine/lower + exact + partial_ok + value_type + columns/encode/decode;
+                Sum Min Max (exact) Count Mean WeightedMean Proportion Percentile; OperatorRegistry (runs the laws)
   lattice.py    Lattice (up/down, multi-valued), MappingLattice
-  product.py    Layer LifecycleStatus · Concept (family, revision, Field roles, term) · Identity + KeyScheme
-                · Instance + LineageRef · Ask · Refuse · servable
+  product.py    Layer LifecycleStatus · Concept (family, opaque revision, Field roles + columns, term or declared
+                dependencies) · Identity + KeyScheme (canonical) · Instance + LineageRef · Ask · Refuse · servable
   gates.py      maturity | freshness | lineage → gate() → GateOutcome
-  bridge.py     Resolver, Store; carrier_from_instances, instances_from_carrier
-  term.py       Ensure Lift Relift Roll Restrict Slice Classify Shift Rekey Map Join Lower · Env · shape · evaluate
+  bridge.py     Resolver, Store; carrier_from_instances, instances_from_carrier (canonical, columns, role ⇔ tag)
+  term.py       Ensure(Ask | AskFrom) Lift Roll Restrict Slice Classify Shift Rekey Map Join Lower · Env · shape ·
+                evaluate · leaves · leaf_ask
   ops.py        Ensure Retire Invalidate — the contracts only a store can fulfil
-  laws.py       31 laws with hypotheses, each naming the block it forces
+  reference.py  MemoryStore + ReferenceInterpreter — those contracts fulfilled from the blocks; the conformance target
+  laws.py       35 laws with hypotheses, each naming the block it forces
 ```
 
 What was *removed* on the way, because no law forced it: a stored per-child coverage mask
@@ -261,18 +268,28 @@ fold runs over an unordered set); `Scale`, `Diff`, `Rank`, `Warm`, `Compose`, `P
 primitives or contracts (the first three expand into `map`/`join`; a warm-up is a loop, a
 composition a `join`, the serving boundary a one-line `servable`, provenance a lookup on the
 carrier); a `Gate` protocol (three functions); four refuse reasons nothing produced; a
-duplicated lifecycle enum.
+duplicated lifecycle enum; `relift` and Gray's `AggregateKind` (one existed only for the
+other — `exact` is the property actually consulted, and it is checkable); `classify` as a
+primitive (it is `rekey` with a computed classification); a carrier-relative "known keys" rule
+in the roll denominator (the denominator is intrinsic: lattice and classifier alone); a dead
+`double_counted` coverage state (a non-partition lattice refuses under every policy);
+`Concept.key` (the revision is the store's recipe key, opaque).
 
-What was *added*, because a law demanded it: the operator tag and `lowered_from`
-(`LAW_TAG_GUARDS_FOLD`, `LAW_REPORTED_NEVER_LIFTED`); `Field` roles on `Concept` so the bridge
-knows what a stored payload *is*; `classify`, `restrict` and `rekey` ("working hours only",
-period-over-period, peer-vs-peer); `relift`, the one lawful way a distributive operator's
-stored output re-enters a fold — and the one consumer of Gray's classification; a
-`classifiers` slot so a stored sliced product can roll up without its siblings; `on_missing`
-with a `PARTIAL` policy gated by `partial_ok`; a term language and a value-free `shape` so
-WHAT/HOW separation is real (`LAW_SHAPE_SOUND`); `LineageRef`s so the lineage gate decides
-from facts the store already holds; derived `depends_on` and `check_layers`, which finally
-give `Layer.may_depend_on` a consumer inside the algebra.
+What was *added*, because a law demanded it: the operator tag and `lowered_from` with the
+re-entry rule (`LAW_TAG_GUARDS_FOLD`, `LAW_REPORTED_REENTRY`: a report re-enters only an
+operator not in its history or exact in it — mean of means unconstructible, mean of daily
+totals writable); `Field` roles and columns on `Concept` so the bridge knows what a stored
+payload *is* and can rebuild a stored `(average, count)` as a mean (`LAW_BRIDGE_ROUND_TRIP`);
+`restrict` and `rekey` ("working hours only", period-over-period, peer-vs-peer); classifiers
+bound to the roll so the denominator is intrinsic and slicing commutes with rolling; `on_missing`
+with a `PARTIAL` policy gated by `partial_ok`; identity-valued provenance and finest-known gaps
+(`LAW_PROVENANCE_IS_LEAVES`, `LAW_ROLL_PATH_INDEPENDENT`); a term language and a value-free
+`shape` so WHAT/HOW separation is real (`LAW_SHAPE_SOUND`), with relative leaves so a recipe
+serves a family; `LineageRef`s so the lineage gate decides from facts the store already
+holds; derived-or-declared `depends_on` and `check_layers`, which finally give
+`Layer.may_depend_on` a consumer inside the algebra; a `Refuse` that every primitive absorbs
+(`LAW_REFUSE_ABSORBS`); a reference interpreter that makes the lifecycle laws executable and
+shows the blocks suffice to write `ensure` (`LAW_ENSURE_RECURSIVE`).
 
 ## Scope boundaries — where A3 stops
 

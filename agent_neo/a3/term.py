@@ -19,6 +19,14 @@ a term can be checked, planned, explained and rewritten before it is run.
 A :class:`~agent_neo.a3.product.Concept` may hold a term as its recipe. Its dependencies are
 then *derived* — the products its ``Ensure`` leaves read — and :func:`check_layers` refuses a
 recipe that reads above its own layer.
+
+A recipe serves a whole family, so its leaves are *relative*: an :class:`AskFrom` leaf names
+the product it reads and a function that derives its ask from the ask being served
+(``Env.ask``). The product is stated on the leaf so dependencies stay static; evaluation
+verifies the derived ask reads it. Reading a leaf is *ensuring* it: an interpreter binds
+``Env.ensure`` and a leaf's instances are what that serves — a refused identity is a missing
+cell, never a stale value read around the gate (:data:`~agent_neo.a3.laws.LAW_ENSURE_RECURSIVE`).
+:func:`leaves` lists a term's leaves so the interpreter can ensure them first.
 """
 
 
@@ -26,7 +34,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Mapping, Union
+from typing import Any, Callable, Mapping, Sequence, Union
 
 from agent_neo.a3 import algebra
 from agent_neo.a3.algebra import (
@@ -35,6 +43,7 @@ from agent_neo.a3.algebra import (
     lift_refusal,
     plan_roll,
     roll_refusal,
+    slice_refusal,
 )
 from agent_neo.a3.bridge import Resolver, Store, carrier_from_instances, lowered_name
 from agent_neo.a3.carrier import (
@@ -46,9 +55,20 @@ from agent_neo.a3.carrier import (
 from agent_neo.a3.gates import maturity_gate
 from agent_neo.a3.lattice import Lattice
 from agent_neo.a3.operators import OperatorRegistry
-from agent_neo.a3.product import Ask, Concept, FieldRole, Refuse, RefuseReason
+from agent_neo.a3.product import (
+    PLAIN_KEY_SCHEME,
+    Ask,
+    Concept,
+    FieldRole,
+    Identity,
+    Instance,
+    KeyScheme,
+    Refuse,
+    RefuseReason,
+)
 
 __all__ = (
+    'AskFrom',
     'Classify',
     'Ensure',
     'Env',
@@ -57,7 +77,6 @@ __all__ = (
     'Lower',
     'Map',
     'Rekey',
-    'Relift',
     'Restrict',
     'Roll',
     'Shape',
@@ -66,6 +85,8 @@ __all__ = (
     'Term',
     'check_layers',
     'evaluate',
+    'leaf_ask',
+    'leaves',
     'products_read',
     'shape',
 )
@@ -84,23 +105,25 @@ class _Node:
 
 
 @dataclass(frozen=True, slots=True)
-class Ensure(_Node):
-    """Materialize a product's ``field`` over the ask: the leaf of every term."""
+class AskFrom:
+    """A leaf's ask, relative to the ask being served: ``derive`` names an ``Env`` function
+    ``Ask -> Ask``; ``product`` is what the derived ask must read."""
 
-    ask: Ask
+    product: str
+    derive: str
+
+
+@dataclass(frozen=True, slots=True)
+class Ensure(_Node):
+    """Materialize a product's ``field`` over an ask — literal, or derived from the ask being
+    served — the leaf of every term."""
+
+    ask: Ask | AskFrom
     field: str
 
 
 @dataclass(frozen=True, slots=True)
 class Lift(_Node):
-    term: Term
-    operator: str
-
-
-@dataclass(frozen=True, slots=True)
-class Relift(_Node):
-    """Re-enter a distributive operator's own reported values as its accumulators."""
-
     term: Term
     operator: str
 
@@ -166,16 +189,21 @@ class Lower(_Node):
     term: Term
 
 
-Term = Union[Ensure, Lift, Relift, Roll, Restrict, Slice, Classify, Shift, Rekey, Map, Join, Lower]
+Term = Union[Ensure, Lift, Roll, Restrict, Slice, Classify, Shift, Rekey, Map, Join, Lower]
+
+
+def leaves(term: Term) -> tuple[Ensure, ...]:
+    """A term's ``Ensure`` leaves, left to right."""
+    if isinstance(term, Ensure):
+        return (term,)
+    if isinstance(term, Join):
+        return (*leaves(term.left), *leaves(term.right))
+    return leaves(term.term)
 
 
 def products_read(term: Term) -> frozenset[str]:
-    """The families a term's ``Ensure`` leaves read: a concept's derived dependencies."""
-    if isinstance(term, Ensure):
-        return frozenset({term.ask.product})
-    if isinstance(term, Join):
-        return products_read(term.left) | products_read(term.right)
-    return products_read(term.term)
+    """The families a term's leaves read — literal or relative: a concept's derived dependencies."""
+    return frozenset(leaf.ask.product for leaf in leaves(term))
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +228,13 @@ class Env:
     now: datetime | None = None
     maturity_lag: timedelta | None = None
     exclusive_end: Callable[[str, str], datetime] | None = None  # (granularity, anchor) → period end
+    #: the interpreter's key scheme; coordinates are canonicalized under it at every leaf
+    scheme: KeyScheme = PLAIN_KEY_SCHEME
+    #: the ask being served, which ``AskFrom`` leaves derive theirs from
+    ask: Ask | None = None
+    #: when bound, a leaf's instances are what this serves for the leaf's ask — the gate-approved
+    #: ones — and a refused identity is a missing cell; ``shape`` and ``evaluate`` both read it
+    ensure: Callable[[Ask], Sequence[Instance | Refuse]] | None = None
 
     def function(self, name: str) -> Callable[..., Any]:
         try:
@@ -243,13 +278,34 @@ class Shape:
         return Shape(expected, present, **fields)
 
 
+def leaf_ask(node: Ensure, env: Env) -> Ask:
+    """The ask a leaf reads: as written, or derived from the ask being served."""
+    if isinstance(node.ask, Ask):
+        return node.ask
+    if env.ask is None:
+        raise KeyError(f'leaf reads {node.ask.product!r} relative to the ask being served, and the environment binds none')
+    derived = env.function(node.ask.derive)(env.ask)
+    if derived.product != node.ask.product:
+        raise ValueError(f'{node.ask.derive!r} derived an ask for {derived.product!r}; the leaf declares {node.ask.product!r}')
+    return derived
+
+
+def _leaf_instances(ask: Ask, identities: tuple[Identity, ...], env: Env) -> tuple[Instance, ...]:
+    if env.ensure is not None:
+        return tuple(r for r in env.ensure(ask) if isinstance(r, Instance))
+    return env.store.fetch(identities)
+
+
 def _ensure_shape(node: Ensure, env: Env) -> Shape:
-    identities = env.resolver.resolve(node.ask)
-    present = env.store.present(identities)
-    spec = env.concepts[node.ask.product].field(node.field)
+    ask = leaf_ask(node, env)
+    identities = env.resolver.resolve(ask)
+    expected = frozenset(env.scheme.canonical(i.coordinate) for i in identities)
+    served = _leaf_instances(ask, identities, env) if env.ensure is not None else env.store.present(identities)
+    present = frozenset(env.scheme.canonical(i.identity.coordinate if isinstance(i, Instance) else i.coordinate) for i in served)
+    spec = env.concepts[ask.product].field(node.field)
     operator = env.operators.get(spec.operator) if spec.role is FieldRole.ACCUMULATOR else None
-    lowered = (lowered_name(spec, env.operators),) if spec.role is FieldRole.REPORTED else ()
-    return Shape(frozenset(i.coordinate for i in identities), frozenset(i.coordinate for i in present), operator, lowered)
+    lowered = (lowered_name(spec, env.operators, node.field),) if spec.role is FieldRole.REPORTED else ()
+    return Shape(expected, present, operator, lowered)
 
 
 def _immature_parents(parents: frozenset[Coordinate], env: Env) -> Refuse | None:
@@ -283,9 +339,6 @@ def shape(term: Term, env: Env) -> Shape | Refuse:
     if isinstance(term, Lift):
         operator = env.operators.get(term.operator)
         return lift_refusal(inner.operator, inner.lowered_from, operator) or inner._with(inner.expected, inner.present, operator=operator)
-    if isinstance(term, Relift):
-        probe = algebra.relift(Carrier({}, inner.expected, inner.operator, inner.lowered_from), env.operators.get(term.operator))
-        return probe if isinstance(probe, Refuse) else inner._with(inner.expected, inner.present, operator=probe.operator, lowered_from=())
     if isinstance(term, Rekey):
         relabel = env.function(term.relabel)
         expected = frozenset(relabel(c) for c in inner.expected)
@@ -310,6 +363,10 @@ def shape(term: Term, env: Env) -> Shape | Refuse:
                 return immature
         return inner._with(plan.parents, frozenset(plan.folds))
     if isinstance(term, (Restrict, Slice)):
+        if isinstance(term, Slice):
+            refusal = slice_refusal(inner.expected, (name for name, _ in term.classifications))
+            if refusal is not None:
+                return refusal
         keep = _keep(term, env)
         return inner._with(frozenset(c for c in inner.expected if keep(c)), frozenset(c for c in inner.present if keep(c)))
     if isinstance(term, Classify):
@@ -345,26 +402,20 @@ def _keep(term: Restrict | Slice, env: Env) -> Callable[[Coordinate], bool]:
 
 
 def evaluate(term: Term, env: Env) -> Carrier[Any] | Refuse:
+    """Run the plan over values. No refusal is checked between steps: every primitive absorbs
+    a ``Refuse`` in any carrier position (:data:`~agent_neo.a3.laws.LAW_REFUSE_ABSORBS`)."""
     if isinstance(term, Ensure):
-        identities = env.resolver.resolve(term.ask)
-        instances = env.store.fetch(identities)
-        spec = env.concepts[term.ask.product].field(term.field)
-        return carrier_from_instances(identities, instances, field=term.field, spec=spec, operators=env.operators)
+        ask = leaf_ask(term, env)
+        identities = env.resolver.resolve(ask)
+        instances = _leaf_instances(ask, identities, env)
+        spec = env.concepts[ask.product].field(term.field)
+        return carrier_from_instances(identities, instances, field=term.field, spec=spec, operators=env.operators, scheme=env.scheme)
     if isinstance(term, Join):
-        left, right = evaluate(term.left, env), evaluate(term.right, env)
-        if isinstance(left, Refuse):
-            return left
-        if isinstance(right, Refuse):
-            return right
-        return algebra.join(left, right)
+        return algebra.join(evaluate(term.left, env), evaluate(term.right, env))
 
     inner = evaluate(term.term, env)
-    if isinstance(inner, Refuse):
-        return inner
     if isinstance(term, Lift):
         return algebra.lift(inner, env.operators.get(term.operator))
-    if isinstance(term, Relift):
-        return algebra.relift(inner, env.operators.get(term.operator))
     if isinstance(term, Rekey):
         return algebra.rekey(inner, env.function(term.relabel))
     if isinstance(term, Lower):

@@ -5,7 +5,7 @@ graph driver, and ``tests/agent_neo/a3/test_import_boundary.py`` keeps it that w
 ``AGENTS.md`` is the charter; ``SKETCH.md`` maps the modules to the laws they serve.
 """
 
-from agent_neo.a3 import algebra, bridge, gates, lattice, laws, ops, term
+from agent_neo.a3 import algebra, bridge, gates, lattice, laws, ops, reference, term
 from agent_neo.a3.algebra import (
     Carrier,
     Coverage,
@@ -19,11 +19,11 @@ from agent_neo.a3.algebra import (
     plan_roll,
     rank,
     rekey,
-    relift,
     restrict,
     roll,
     scale,
     shift,
+    slice_refusal,
 )
 from agent_neo.a3.algebra import map as map_cells
 from agent_neo.a3.algebra import slice as slice_cells
@@ -31,7 +31,9 @@ from agent_neo.a3.bridge import (
     Resolver,
     Store,
     carrier_from_instances,
+    columns_of,
     instances_from_carrier,
+    lowered_name,
 )
 from agent_neo.a3.carrier import (
     ABSENT,
@@ -54,7 +56,6 @@ from agent_neo.a3.gates import (
 )
 from agent_neo.a3.lattice import Lattice, MappingLattice
 from agent_neo.a3.operators import (
-    AggregateKind,
     Count,
     IllegalOperatorUse,
     Max,
@@ -89,7 +90,9 @@ from agent_neo.a3.product import (
     TermLike,
     servable,
 )
+from agent_neo.a3.reference import MemoryStore, ReferenceInterpreter
 from agent_neo.a3.term import (
+    AskFrom,
     Classify,
     Ensure,
     Env,
@@ -98,7 +101,6 @@ from agent_neo.a3.term import (
     Lower,
     Map,
     Rekey,
-    Relift,
     Restrict,
     Roll,
     Shape,
@@ -107,6 +109,8 @@ from agent_neo.a3.term import (
     Term,
     check_layers,
     evaluate,
+    leaf_ask,
+    leaves,
     products_read,
     shape,
 )
@@ -115,8 +119,8 @@ __all__ = (
     'ABSENT',
     'PLAIN_KEY_SCHEME',
     'Absent',
-    'AggregateKind',
     'Ask',
+    'AskFrom',
     'Carrier',
     'Classifications',
     'Classify',
@@ -148,6 +152,7 @@ __all__ = (
     'MappingLattice',
     'Max',
     'Mean',
+    'MemoryStore',
     'Min',
     'OnMissing',
     'Operator',
@@ -156,10 +161,10 @@ __all__ = (
     'Proportion',
     'RatioAccumulator',
     'RecomputeReason',
+    'ReferenceInterpreter',
     'Refuse',
     'RefuseReason',
     'Rekey',
-    'Relift',
     'Resolver',
     'Restrict',
     'Retire',
@@ -181,6 +186,7 @@ __all__ = (
     'carrier_from_instances',
     'check_layers',
     'classify',
+    'columns_of',
     'diff',
     'evaluate',
     'freeze_classifications',
@@ -192,17 +198,20 @@ __all__ = (
     'join',
     'lattice',
     'laws',
+    'leaf_ask',
+    'leaves',
     'lift',
     'lineage_gate',
     'lower',
+    'lowered_name',
     'map_cells',
     'maturity_gate',
     'ops',
     'plan_roll',
     'products_read',
     'rank',
+    'reference',
     'rekey',
-    'relift',
     'restrict',
     'roll',
     'scale',
@@ -210,5 +219,6 @@ __all__ = (
     'shape',
     'shift',
     'slice_cells',
+    'slice_refusal',
     'term',
 )

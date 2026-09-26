@@ -55,7 +55,6 @@ class CoverageState(StrEnum):
 
     KNOWN = 'known'
     MISSING = 'missing'
-    DOUBLE_COUNTED = 'double_counted'
 
 
 Classifications = tuple[tuple[str, str], ...]
