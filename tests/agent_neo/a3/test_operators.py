@@ -194,5 +194,11 @@ def test_registry_accepts_conforming_operators_and_refuses_the_rest() -> None:
 
     with pytest.raises(IllegalOperatorUse, match='exact'):
         registry.register('liar', _FalselyExact(), samples=[1.0, 2.0, 9.0])
+
+    class _FalselyExactRatio(Proportion):  # its report is a float; its lift takes a pair — the probe must say so, not crash
+        exact = True
+
+    with pytest.raises(IllegalOperatorUse, match='cannot re-enter lift'):
+        registry.register('liar2', _FalselyExactRatio(), samples=[(1.0, 4.0), (2.0, 4.0), (3.0, 4.0)])
     with pytest.raises(KeyError):
         registry.get('nope')

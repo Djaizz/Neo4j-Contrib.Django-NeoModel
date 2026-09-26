@@ -157,7 +157,30 @@ A binding conforms when `tests/agent_neo/a3/test_reference.py` passes with its `
    leaks out of `AbstractAnalyticalComputedProduct.get()`; `_is_valid` and its helpers stay as
    thin adapters with unchanged signatures.
 
+## Client patterns — learned by writing a recipe against the reference interpreter
+
+- **`OnMissing.REFUSE` refuses the plan; `OnMissing.ABSENT` refuses the identity.** In a recipe that
+  serves a family (one term, many subjects), a gap under one subject must not refuse the others:
+  use `ABSENT` on the rolls and let `ensure` return the per-identity `Refuse(INCOMPLETE_PARTITION)`
+  with the finest gap named. `REFUSE` is for a plan that is meaningless when any part is missing.
+- **Slice the asked classification right after `Classify`.** Otherwise the plan also builds the
+  sibling slices (`run=off`) and a gap there refuses or absents parents nobody asked for.
+- **A classifier is defined at every level it will be consulted at.** A roll to the day asks the
+  classifier about day coordinates; "on if any hour under it is on" is the usual shape.
+- **A coordinate function that needs the served subject has no way to see it.** Broadcasting a
+  site-level series onto the asked plant (`rekey` site → plant) needs the plant; today that takes
+  an escape hatch (a context variable set around `ensure`). See the open item below.
+- **A leaf's refusal is not chained into its parent's.** The parent's refusal names the missing
+  leaf coordinate; asking the leaf's family directly names the finest gap. Chaining is an open item.
+
 ## Open after v1 — decided when a consumer needs them, not before
+
+- **Ask-aware coordinate functions.** `Env.functions` entries for `Rekey`/`Map`/`Restrict`/
+  `Classify` cannot see `Env.ask`; a broadcast of a site-level series onto the served subject
+  needs either that (a function marked as taking the ask first) or a broadcast join. Found by the
+  R-COP exercise (kWh per cooling-degree-hour per plant).
+- **Chained refusals.** `ensure` drops leaf refusals when it builds the parent's carrier; carrying
+  them in the parent refusal's context would make one ask sufficient to see the root cause.
 
 - **Broadcast join** with a coarser or timeless carrier (usage divided by a floor area, a rate
   by a class): `rekey` is injective so it cannot broadcast; `scale(Mapping)` is the interim.

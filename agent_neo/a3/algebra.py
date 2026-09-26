@@ -202,7 +202,7 @@ def lift_refusal(operator_tag: Any | None, lowered_from: tuple[str, ...], operat
     name = type(operator).__name__
     if name in lowered_from and not operator.exact:
         return Refuse(RefuseReason.ILL_TYPED_ROLL,
-                      f'these are reported {name} values; a {name} of {name}s is not a {name} (roll the stored accumulators, '
+                      f'these are reported {name} values; a {name} over {name} reports is not a {name} (roll the stored accumulators, '
                       'or the leaves)', {'lowered_from': lowered_from, 'operator': operator})
     if not operator.mergeable:
         return Refuse(RefuseReason.NO_MERGEABLE_ACCUMULATOR,

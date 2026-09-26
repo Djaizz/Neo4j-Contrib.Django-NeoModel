@@ -120,7 +120,7 @@ def test_law_tag_guards_fold(space) -> None:
 def test_law_reported_reentry_refuses_a_mean_of_means(space) -> None:
     means = _ok(lower(_ok(roll(_acc(leaves(), Mean()), dimension=Dimension.SUBJECT, to_level='floor', lattice=space))))
     again = lift(means, Mean())  # a mean of means, refused at the type level
-    assert again.reason is RefuseReason.ILL_TYPED_ROLL and 'a Mean of Means is not a Mean' in again.detail
+    assert again.reason is RefuseReason.ILL_TYPED_ROLL and 'a Mean over Mean reports is not a Mean' in again.detail
     assert _ok(lift(means, Sum())).lowered_from == ('Mean',)  # a sum of floor means is a different quantity, not a double application
     joined = _ok(join(_ok(scale(means, 2.0)), _ok(map_cells(means, abs))))
     assert joined.lowered_from == ('Sum',) or joined.lowered_from == ('Mean',)

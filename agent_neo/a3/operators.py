@@ -449,8 +449,11 @@ class OperatorRegistry:
         for acc in accumulators[1:]:
             folded = op.combine(folded, acc)
         if op.exact:
-            reentered = op.combine(*(op.lift(op.lower(acc)) for acc in (op.combine(accumulators[0], accumulators[1]), accumulators[2])))
             direct = op.combine(op.combine(accumulators[0], accumulators[1]), accumulators[2])
+            try:
+                reentered = op.combine(*(op.lift(op.lower(acc)) for acc in (op.combine(accumulators[0], accumulators[1]), accumulators[2])))
+            except Exception as exc:  # the report is not even a value the operator lifts: it cannot be its own accumulator
+                raise IllegalOperatorUse(f'operator {name!r} claims exact, but its report cannot re-enter lift ({type(exc).__name__})') from exc
             if not _close(op.lower(reentered), op.lower(direct)):
                 raise IllegalOperatorUse(f'operator {name!r} claims exact, but a re-entered report does not fold like its accumulator')
         encoded = op.encode(folded)
