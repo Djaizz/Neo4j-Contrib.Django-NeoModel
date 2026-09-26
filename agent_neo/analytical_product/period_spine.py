@@ -7,6 +7,8 @@ from typing import LiteralString
 
 from neomodel.properties import Property, StringProperty
 
+from agent_neo.graph_db.cypher_templates import SCOPE_NAME_DB_PROPERTY
+
 
 __all__: tuple[LiteralString, ...] = (
     'PERIOD_SPINE_MAX_STRING_LENGTH',
@@ -14,7 +16,7 @@ __all__: tuple[LiteralString, ...] = (
 )
 
 
-PERIOD_SPINE_MAX_STRING_LENGTH = 3333
+PERIOD_SPINE_MAX_STRING_LENGTH = 4096
 
 
 class PeriodSpineMixin:
@@ -27,12 +29,11 @@ class PeriodSpineMixin:
         db_property='cache_key',
         max_length=PERIOD_SPINE_MAX_STRING_LENGTH,
     )
-    # ``db_property='facility_name'`` is a legacy on-disk alias kept for deployed-graph
-    # compatibility; the API surface is ``scope_name``. See ``abstract.py`` for the note.
+    # Stored under ``SCOPE_NAME_DB_PROPERTY``; code reads and writes ``scope_name``.
     scope_name: Property = StringProperty(
         index=True,
         required=True,
-        db_property='facility_name',
+        db_property=SCOPE_NAME_DB_PROPERTY,
         max_length=PERIOD_SPINE_MAX_STRING_LENGTH,
     )
     temporal_granularity: Property = StringProperty(

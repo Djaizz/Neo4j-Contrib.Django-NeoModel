@@ -87,8 +87,8 @@ def test_allow_row_split_divides_an_over_budget_row() -> None:
 def test_rows_with_empty_item_lists_are_kept_not_skipped() -> None:
     """An empty item list is how "this subject now has none" is expressed.
 
-    The verb vocabulary: ``set`` means replace with exactly this, and
-    the empty set is a legal target state that must clear rather than be ignored.
+    A write that replaces the item list with exactly this one must clear the list
+    when the target is empty, not ignore it.
     """
     chunks = _chunk_rows_by_item_budget(
         _rows(0, 0, 2), count_key='targets', batch_size=10,

@@ -1,8 +1,15 @@
 """Projection helpers for serving computed-product rows across the View boundary.
 
-These are generic graph-node mechanisms: project a persisted instance to a payload
-dict, serve multi-row collections, and ensure concept anchors. The functions operate
-on any ``AbstractAnalyticalComputedProduct`` subclass — they carry no domain logic.
+Mechanisms for projecting a persisted instance to a payload dict, serving multi-row
+collections, and ensuring concept anchors. They hold no domain logic, but some assume
+a schema the base classes do not declare — each helper names what it expects:
+
+- ``ensure_official_concept`` expects the concept class to have a ``concept_key``
+  property and an ``official_concept_defaults(**kwargs)`` classmethod.
+- ``serve_projected_payload_rows`` expects ViewSet nodes to carry a
+  ``projected_payload_json`` property.
+- ``project_instance_to_payload`` prefers a ``_to_payload(instance, tz)`` hook on the
+  product class and falls back to ``to_payload``.
 """
 
 

@@ -1,4 +1,4 @@
-"""Label-agnostic Neo4j bulk helpers for period rollup and hourly summary cache nodes."""
+"""Label-agnostic Neo4j bulk helpers for period rollup cache nodes."""
 
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ import json
 import logging
 
 from agent_neo.graph_db.cypher_templates import (
+    SCOPE_NAME_DB_PROPERTY,
     FETCH_CACHE_KEYS_BY_SPINE_WINDOW,
     FETCH_ROWS_BY_CACHE_KEYS,
     MERGE_ROWS_BY_CACHE_KEY,
@@ -24,11 +25,11 @@ __all__: tuple[LiteralString, ...] = (
     'fetch_cache_keys_by_indexed_filters_cypher',
     'fetch_period_rollup_cache_keys_by_spine_window_cypher',
     'fetch_period_rollup_rows_by_cache_keys_cypher',
-    'hourly_summary_maps_from_cypher_rows',
     'merge_period_rollup_rows_cypher',
     'neo4j_bulk_timestamps',
     'preload_period_rollups_by_spine_window_cypher',
     'property_maps_from_cypher_rows',
+    'rows_by_cache_key_from_cypher_rows',
     'safe_connect_relationship',
     'spine_window_where_clauses',
 )
@@ -112,7 +113,7 @@ def spine_window_where_clauses(
     local_period_start_lt: str | None = None,
 ) -> tuple[list[str], dict[str, Any]]:
     """Build indexed ``WHERE`` fragments for period-spine range scans (populate, preload)."""
-    where_clauses = [f'{node_alias}.facility_name = $scope_name']
+    where_clauses = [f'{node_alias}.{SCOPE_NAME_DB_PROPERTY} = $scope_name']
     params: dict[str, Any] = {'scope_name': scope_name}
     if temporal_granularity is not None:
         where_clauses.append(f'{node_alias}.temporal_granularity = $temporal_granularity')
@@ -172,10 +173,11 @@ def property_maps_from_cypher_rows(
     return by_key
 
 
-def hourly_summary_maps_from_cypher_rows(
+def rows_by_cache_key_from_cypher_rows(
     rows: list[list[Any]],
     columns: list[str],
 ) -> dict[str, dict[str, Any]]:
+    """Key Cypher result rows by their ``cache_key`` column; rows without one are dropped."""
     by_key: dict[str, dict[str, Any]] = {}
     for row in rows:
         row_dict = dict(zip(columns, row, strict=False))

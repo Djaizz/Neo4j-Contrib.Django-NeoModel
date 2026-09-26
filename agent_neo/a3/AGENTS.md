@@ -32,45 +32,27 @@ storage-agnostic and `django_neomodel` is a Django ↔ Neo4j bridge. The
 
 ## Why this layer exists
 
-A3 is inspired by a first, still-unfinished attempt to build an
-**agent-authored, agent-evolvable** analytical layer: written governance harness,
-requirement files, design proofs, health checks — the scaffolding of a serious
-try. That exercise is a construction site, not a finished building. Scaffolding
-went up (dozens of requirements, design elements, a divergence register); the
-structure is incomplete, uneven, and already showing stress.
-
-It drifted under that prose governance within weeks:
-
-- the necessity/sufficiency proof covers 28 requirements; there are 32
-- the problem-pattern coherence check links to a health assessment file that no
-  longer exists
-- three `…MetricSet`-suffixed facades still accept a `force_redo` argument that a
-  verified requirement prohibits — and silently discard it (one does `del force_redo`)
-- a spatial-temporal rollup helper mechanically generates the full operator cross
-  product — 121 field rules including `qty_p95OverSpace_p95OverTime` and
-  `qty_avgOverSpace_avgOverTime`, neither of which denotes anything
-
-None of that is a verdict on the attempt. It is evidence about the medium:
+A3 is motivated by experience building **agent-authored, agent-evolvable**
+analytical layers whose rules were written as prose. Prose governance decays at
+agent speed: nothing checks that the documents, the checks and the code still
+agree, so they drift apart silently.
 
 > **Governance-by-document is what you do when you cannot govern by construction.
 > Prose governance decays at agent speed.**
 
-The attempt is what motivates A3: keep pushing toward agent-buildable analytics,
-but put an algebra underneath so the next structures are composed inside laws
-instead of imitated from the last file. Look at those requirements through that
-lens and they sort into three kinds. Some are **laws** that could execute and
-don't. Some are **judgments** that genuinely cannot be derived. And some are
-**prohibitions standing in for missing abstractions** —
-`ANALYTICAL-NO-FORCE-REDO-ARGS` forbids a knob because invalidation cannot be
-computed; the mandated two-phase rollup order is policy because the operator
-laws are unstated; `ANALYTICAL-CODE-GEN`'s canonical forms and six named
-anti-patterns exist because agents author by imitation rather than by
+A3 keeps pushing toward agent-buildable analytics but puts an algebra underneath,
+so new structures are composed inside laws instead of imitated from the last
+file. Written rules sort into three kinds. Some are **laws** that could execute
+and don't. Some are **judgments** that genuinely cannot be derived. And some are
+**prohibitions standing in for missing abstractions** — for example, a ban on
+hand-editing cached results exists only because identity is not derived, and
+canonical file shapes exist because agents author by imitation rather than by
 construction.
 
 A3 is the attempt to move the first kind into code, give the second kind a
 declared slot, and let the third kind dissolve — so humans and agents can keep
-evolving analytical structure without the construction site having to invent a
-new vernacular for every floor.
+evolving analytical structure without inventing a new vernacular for every
+floor.
 
 
 ## Historical analogy — why an *algebra*
@@ -85,9 +67,8 @@ illustrations of the *leverage*, not the target of this work.
 
 Neo4j already has its data-access surface in Cypher (and ORMs over it). A3 is
 not competing with that layer. The missing floor is for **analytical products** —
-metrics, rollups, views, lineage, freshness — which today grow as Python
-methods, prompt-shaped requirements, and ad-hoc helpers, and then drift for the
-reasons above. A3's goal is a foundational algebra so humans and agents can
+metrics, rollups, views, lineage, freshness — which otherwise grow as ad-hoc
+methods and helpers, and drift. A3's goal is a foundational algebra so humans and agents can
 respond to operator needs by composing inside well-understood moves, not by
 imitating the last file that looked similar.
 
@@ -142,8 +123,7 @@ package. The eleven modules that *do* bind — `abstract.py`,
 interpreter.
 
 A3's first increment is therefore mostly **naming a split that already exists**,
-not inventing one. The same move was already run one level down when domain
-vocabulary was extracted out of `agent_neo` into its domain package.
+not inventing one.
 
 ## What makes it *agentic*
 
@@ -156,11 +136,10 @@ failures are typed, and conformance is checkable — not a style guide.
    human reads a style guide and applies judgment. An agent needs a checker. Any
    governance rule that cannot execute will drift.
 
-2. **The authority split must be encoded, not stated.** "Domain packages may
-   evolve analytical vocabulary; the platform retains control of structural and
-   ingestion layers" is the most important governance primitive in the harness
-   — and it is currently a sentence in a markdown file. It was already violated
-   (a structural module importing a private analytical one). A3 should express
+2. **The authority split must be encoded, not stated.** A rule saying which
+   packages may change which layers is the most important governance primitive
+   an agent-authored system has — and written as a sentence in a markdown file,
+   a single import across the boundary breaks it unnoticed. A3 should express
    authority boundaries as something enforceable: import-graph rules, capability
    scopes, CI gates.
 
@@ -197,23 +176,25 @@ invariants: property-testable, storage-agnostic, domain-free.
 
 **(b) Judgments that cannot be derived → A3 declares the slot; the project fills it.**
 Is 30 minutes the right maturity buffer? What staleness limit does this view
-deserve? What counts as a working hour? These are real decisions with no correct
+deserve? Which bucket does a given hour belong to? These are real decisions with no correct
 default. A3 defines the parameter and **refuses to supply a value**.
 
 **(c) Prohibitions standing in for missing abstractions → keep out.**
-If A3 exports today's harness verbatim, every future consumer inherits a rule
-forbidding `force_redo` — when the correct end state is not a prohibition but a
-derivation, with no surface to force because nothing would consume one. Likewise
-the mandated rollup order, which should dissolve into a theorem.
+If A3 exported one project's prohibitions verbatim, every future consumer would
+inherit rules such as a ban on override flags — when the correct end state is not
+a prohibition but a derivation, with no surface to override because nothing would
+consume one. Ordering rules for folds likewise dissolve into a theorem (see the
+operator model).
 
 > Heuristic: **anything phrased as "do not" is a bucket-(c) suspect. Real laws
 > read as "is."**
 
 ## The operator model (the one genuinely new piece)
 
-Today's operator registry is `dict[str, Callable]` with no algebraic metadata —
-the engine cannot tell `sum` from `percentile`. That is why the cross-product
-helper can emit "the 95th percentile of a set of 95th percentiles."
+A registry of bare callables (`dict[str, Callable]`) carries no algebraic
+metadata — an engine built on one cannot tell `sum` from `percentile`, so a
+helper that crosses operators with dimensions can emit "the 95th percentile of a
+set of 95th percentiles."
 
 A3 operators carry their factorization:
 
@@ -237,17 +218,16 @@ Two consequences worth stating plainly:
   try to `combine` that.** Quantiles do not decompose at all; the only correct
   constructions are recompute-from-leaves or a mergeable sketch as the payload.
 - **Fold order becomes a theorem, not a policy.** If `combine` is a commutative
-  monoid, any bracketing of the index set agrees, so spatial-then-temporal
-  ordering stops being a correctness mandate and becomes a free choice — pick the
-  order that maximizes cache reuse. Classification dimensions come along free:
+  monoid, any bracketing of the index set agrees, so the order of folds across
+  dimensions stops being a correctness question and becomes a free choice — pick
+  the order that maximizes cache reuse. Classification dimensions come along free:
   they are index-set restrictions, and restriction commutes with a monoid fold
   over a partition.
 
 A third consequence is predictive rather than corrective. A linear `map` commutes
-with `roll`, which is *why* several quantity×rate derivatives could be unified
-into one class — glimpsed in that first construction attempt, but the same law
-says which derivatives cannot unify that way (anything non-linear must be
-computed after the fold), and it surfaces a live side condition: a linear
+with `roll`, so derivatives of the form `qty × rate` can share one
+implementation; the same law says which derivatives cannot (anything non-linear
+must be computed after the fold), and it surfaces a live side condition: a linear
 `qty × rate` map holds **only while the rate is constant over the roll window**.
 Time-varying rates break it, and nothing in a registry of bare callables would
 notice.
@@ -269,15 +249,18 @@ a3/
 
 Increment order, smallest decisive first:
 
-1. **Name the split that already exists** — move the 26 storage-agnostic modules
-   in. Near-zero risk; it is a rename of something already true.
+1. **Name the split that already exists** — move in the modules that are
+   storage-agnostic **and** domain-agnostic: identity, enums, scope, registry.
+   Storage-agnostic is not the same thing: request resolution, freshness, the
+   datetime resolvers and the populate/projection helpers still ship policy
+   *defaults* (a maturity lag, a staleness bound) that the invariants below keep
+   out of A3. They move once those values become declared slots.
 2. **Add the accumulator to the operator model** — the one genuinely new piece,
    and the one that makes ill-typed rollups unconstructible rather than merely
    regrettable.
 3. **Ship the three-gate model as the headline abstraction** — maturity /
-   freshness / invalidation as three separately-testable gates is among the
-   clearest ideas that attempt surfaced, and most systems conflate the latter
-   two.
+   freshness / invalidation as three separately-testable gates; most systems
+   conflate the latter two.
 4. **A conformance runner, not a requirements corpus** — the generic asset is
    "requirements execute and are checked in CI," never the specific requirements.
 
@@ -289,29 +272,29 @@ language. Those need the carrier settled first (see Open questions).
 A3 covers the derivation stack from source observations up through metrics, and
 the derivation of views from metrics. It stops at three walls, on purpose:
 
-- **Judgment is not algebraic.** "That reading looks off" is a threshold policy —
+- **Judgment is not algebraic.** "That value looks off" is a threshold policy —
   scope-configured, occasionally political, changeable without any underlying
   fact changing. It can be modelled as a morphism to a label lattice, but there
-  are no useful rewrite laws, so there is nothing to optimize. Early attempts
-  already show the shape: **many metric facades against few judgment facades.**
-  That asymmetry is the honest boundary, not a gap.
+  are no useful rewrite laws, so there is nothing to optimize. That is the honest
+  boundary, not a gap.
 - **Presentation is a different formalism.** Charts, tables, tabs, row/column
   semantics belong to a grammar of graphics. Unifying it with an aggregation
   algebra would be a category error.
 - **Domain vocabulary stays in the domain.** Scope-local time, a maturity buffer,
-  classification dimensions (weekday vs weekend, operating vs idle), and a
+  classification dimensions (e.g. weekday vs weekend, in-window vs
+  out-of-window), and a
   multi-level scope lattice are domain concerns. Their *shapes* generalize —
   a domain-local time basis, a maturity lag parameter per granularity,
   classification dimensions as part of identity, a scope lattice with partition
   side conditions. Parametrize those; never hard-code the values.
 
 One boundary is a feature rather than a limitation. Real scope hierarchies are
-not lattices — early domain drafts already concede that not every parent has a
-clean child partition. So `roll` over scope carries a **partition side
-condition**: aggregating to a parent is meaningful only if the children
-partition it, with no gaps and no double-counting. A3 should make coverage a
-first-class, propagated property. Current practice sums whatever children were
-found, which is exactly how coverage gaps become silent undercounts.
+often not lattices: not every parent has a clean child partition. So `roll` over
+scope carries a **partition side condition**: aggregating to a parent is
+meaningful only if the children partition it, with no gaps and no
+double-counting. A3 should make coverage a first-class, propagated property.
+Summing whatever children are found turns coverage gaps into silent
+undercounts.
 
 ## Invariants (binding once code lands)
 
@@ -338,10 +321,9 @@ found, which is exactly how coverage gaps become silent undercounts.
   the consuming project; only their executable form belongs here.
 - Do not let a bucket-(c) prohibition in because it is currently true. Fix the
   abstraction or leave it in the domain.
-- Do not generalize beyond what a second consumer has actually demanded. A3 is
-  being abstracted from **one unfinished attempt** (n = 1). Frameworks shaped by
-  a single construction site come out shaped like that site. Extract what the
-  de-domaining exercise already proved generic; let the rest wait.
+- Do not generalize beyond what a second consumer has actually demanded. Until
+  one exists, a framework shaped by a single use comes out shaped like that use.
+  Extract only what has been shown to be domain-free; let the rest wait.
 - Do not let `a3` acquire a storage opinion. The moment it does, it stops being
   the floor and becomes a second `agent_neo`.
 
@@ -355,26 +337,19 @@ found, which is exactly how coverage gaps become silent undercounts.
 2. **Packaging.** `a3` inside `agent_neo` ships an algebra inside a Django/Neo4j
    distribution, which works against the goal of reuse beyond one project. Revisit
    when a second consumer appears; until then the import boundary is the hedge.
-3. **Concept as recipe vs Concept as term.** Early designs already sketch the
-   right node — a design-level Concept holding "meaning, compute logic, declared
-   dependencies" — but today it often holds a Python method pointer. If it held
-   the term instead, dependency edges would derive from free variables rather
-   than hand declaration, Concepts would become diffable, invalidation could
-   narrow to affected subterms, and explanation would be term pretty-printing.
-   That is the whole distance between a construction-site codebase and an
-   algebraic one. Not yet a commitment.
-4. **Operator set beyond folds.** Most operators in that first attempt are folds
-   along one dimension. Observed demand is full of `join`, `compare`
-   (period-over-period, peer-vs-peer) and `rank` — currently large amounts of
-   hand-written composition code that does not know it is a join. Blocked on (1).
+3. **Concept as recipe vs Concept as term.** A design-level Concept can hold a
+   Python method pointer (a recipe) or the term itself. If it held the term,
+   dependency edges would derive from free variables rather than hand
+   declaration, Concepts would become diffable, invalidation could narrow to
+   affected subterms, and explanation would be term pretty-printing. That is the
+   whole distance between a procedural codebase and an algebraic one. Not yet a
+   commitment.
+4. **Operator set beyond folds.** Folds along one dimension are only the start:
+   analytical questions routinely need `join`, `compare` (period-over-period,
+   peer-vs-peer) and `rank`, which otherwise end up as hand-written composition
+   code that does not know it is a join. Blocked on (1).
 
 ## Related
 
 - `agent_neo/README.md` — the current package layering.
 - `agent_neo/analytical_product/` — machinery A3 would lift and reinterpret.
-- The motivating attempt — an unfinished, agent-authored analytical layer built
-  on `agent_neo`. Construction site, not cathedral: its scaffolding and its
-  drift are what inspire abstracting an `a3` floor so the next attempt can
-  evolve under laws. It is not public; observations above are reproduced without
-  identifying detail because they are evidence about the *medium*, not a claim
-  that the attempt is finished or exemplary.

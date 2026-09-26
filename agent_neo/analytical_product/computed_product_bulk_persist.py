@@ -169,7 +169,7 @@ def _upsert_row(
 ) -> dict[str, Any]:
     properties: dict[str, Any] = {
         'cache_key': identity.cache_key,
-        'facility_name': identity.scope_name,
+        'scope_name': identity.scope_name,
         'subject_kind': identity.subject_kind,
         'subject_key': identity.subject_key,
         'product_kind': _product_kind(product_cls, compute_result),

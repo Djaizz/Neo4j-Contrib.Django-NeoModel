@@ -52,7 +52,7 @@ def run_prefetch(
     ----------
     1. Keys: We collect the node identifier (e.g. uri, name, uuid) from every node in
        `queryset` using `node_key_name`. This list is passed to Cypher under the
-       parameter name `cypher_param_name_for_node_keys` (e.g. {'asset_type_uris': [uri1, uri2, ...]}).
+       parameter name `cypher_param_name_for_node_keys` (e.g. {'shelf_uris': [uri1, uri2, ...]}).
 
     2. One query: We run query_obj.query once with that parameter. The query must
        RETURN one row per requested node, with the node's key in a column named
@@ -73,7 +73,7 @@ def run_prefetch(
 
     5. attach_prefetch_entry_to_node(node, entry): For each node in the queryset we
        look up its entry and call this callable. It sets attributes on the node
-       (e.g. node._prefetched_point_role_uris = entry['point_role_uris']) so
+       (e.g. node._prefetched_book_uris = entry['book_uris']) so
        list_display methods or serializers can read them without hitting the DB.
 
     Note: node_key_name has no default (e.g. not 'uri'). Callers must pass the
@@ -82,10 +82,10 @@ def run_prefetch(
     Parameters:
     -----------
     admin_or_viewset : Admin or ViewSet instance that has (or will have) _prefetch_cache.
-    queryset : NodeSet of nodes to prefetch for (e.g. AssetType.nodes, or filtered subset).
+    queryset : NodeSet of nodes to prefetch for (e.g. Shelf.nodes, or filtered subset).
     query_obj : Batch Cypher query object (.query string and .get_column_index(column_name)).
-    cypher_param_name_for_node_keys : Cypher parameter name that receives the list of node keys (e.g. 'asset_type_uris').
-    result_row_key_column_name : RETURN column name that contains the node key in each row (e.g. 'asset_type_uri').
+    cypher_param_name_for_node_keys : Cypher parameter name that receives the list of node keys (e.g. 'shelf_uris').
+    result_row_key_column_name : RETURN column name that contains the node key in each row (e.g. 'shelf_uri').
     node_key_name : Node attribute used as key (e.g. 'uri', 'name', 'uuid'). No default; callers must specify.
     build_prefetch_entry_from_row : (row, query_obj) -> dict; builds the prefetch entry for one result row.
     attach_prefetch_entry_to_node : (node, entry) -> None; sets node._prefetched_* attributes from entry.
@@ -137,7 +137,7 @@ def safe_list_from_row(
     row : Single result row (list of values; indices match query RETURN order).
     query_obj : Object with .get_column_index(name) so we resolve column_name to an index
                 without hardcoding positions (stable if RETURN clause order changes).
-    column_name : Logical name of the column in the query's RETURN (e.g. 'asset_type_has_point_role_uris').
+    column_name : Logical name of the column in the query's RETURN (e.g. 'shelf_has_book_uris').
     row_len_check : If True (default), we avoid IndexError when row has fewer columns than
                     the requested index by treating that as None -> [].
 
@@ -174,7 +174,7 @@ def safe_scalar_from_row(
     -----------
     row : Single result row (list of values).
     query_obj : Object with .get_column_index(name) for stable column lookup.
-    column_name : Logical name of the column in the query's RETURN (e.g. 'aspect_type_uri').
+    column_name : Logical name of the column in the query's RETURN (e.g. 'library_uri').
 
     Returns:
     --------

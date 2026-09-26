@@ -12,7 +12,7 @@ __all__: tuple[LiteralString, ...] = ('coerce_metrics_mapping', 'json_safe_struc
 
 
 def coerce_metrics_mapping(metrics: Any) -> dict[str, Any]:
-    """Normalize L1 ``metrics`` from NeoModel or raw Cypher (sometimes JSON string)."""
+    """Normalize a ``metrics`` mapping read from NeoModel or raw Cypher (sometimes a JSON string)."""
     if metrics is None:
         return {}
     if isinstance(metrics, dict):

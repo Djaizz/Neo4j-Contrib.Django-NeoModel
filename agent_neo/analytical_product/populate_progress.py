@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
-from typing import Any, Final, LiteralString, Protocol, TypeVar
+from typing import Any, LiteralString, Protocol, TypeVar
 import logging
 import os
 import re
@@ -15,7 +15,6 @@ import threading
 import time
 
 
-_NEO_LABEL_PREFIXES: Final[tuple[str, ...]] = ()
 
 
 def _env_value(name: str, *, default: str = '') -> str:
@@ -155,7 +154,7 @@ def format_explicit_half_open_time_window(
 
 
 def _comma_separated_tqdm(*args: Any, **kwargs: Any) -> Any:
-    """tqdm with thousands separators in ``n_fmt`` / ``total_fmt`` (e.g. 1,216/3,610)."""
+    """tqdm with thousands separators in ``n_fmt`` / ``total_fmt`` (e.g. 1,234/4,800)."""
     global _CommaSeparatedTqdm
     if _CommaSeparatedTqdm is None:
         from tqdm import tqdm as _StdTqdm
@@ -263,7 +262,7 @@ def _local_datetime_tz_suffix(local_datetime: datetime) -> str:
 
 
 def format_local_hour_window_label(hour_start: datetime, hour_end: datetime) -> str:
-    """Finished local hour as ``2026-05-31T09:00-10:00+05:30`` (start–end, not a single instant)."""
+    """Finished local hour as ``2026-05-31T09:00-10:00+05:45`` (start–end, not a single instant)."""
     timezone_suffix = _local_datetime_tz_suffix(hour_start)
     if hour_end.date() == hour_start.date():
         return (
@@ -418,18 +417,11 @@ class PopulateProgress:
         self._step_once_keys.add(normalized_key)
         self.step(message)
 
-    @staticmethod
-    def _short_neo_label(label: str) -> str:
-        for prefix in _NEO_LABEL_PREFIXES:
-            if label.startswith(prefix):
-                return label[len(prefix):]
-        return label
-
     def note_cache_collision(self, *, neo_label: str, cache_key_tail: str) -> None:
         """Recover from parallel-populate cache_key races (silent; optional DEBUG log)."""
         if not _log_cache_collisions():
             return
-        short_label = self._short_neo_label(neo_label)
+        short_label = neo_label
         self._cache_collision_counts[short_label] = (
             self._cache_collision_counts.get(short_label, 0) + 1
         )

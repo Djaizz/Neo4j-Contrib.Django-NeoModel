@@ -18,7 +18,7 @@ from agent_neo.util.datetime import (
     start_of_next_local_day,
 )
 
-IST = ZoneInfo('Asia/Kolkata')
+SCOPE_TZ = ZoneInfo('Asia/Kathmandu')
 
 
 @pytest.mark.parametrize(
@@ -43,8 +43,8 @@ def test_shift_months() -> None:
 
 
 def test_month_floor() -> None:
-    local_datetime = datetime(2026, 5, 22, 13, 45, tzinfo=IST)
-    assert month_floor(local_datetime) == datetime(2026, 5, 1, 0, 0, tzinfo=IST)
+    local_datetime = datetime(2026, 5, 22, 13, 45, tzinfo=SCOPE_TZ)
+    assert month_floor(local_datetime) == datetime(2026, 5, 1, 0, 0, tzinfo=SCOPE_TZ)
 
 
 def test_complete_calendar_month_windows_in_range_includes_may_excludes_partial_june() -> None:
@@ -69,15 +69,15 @@ def test_complete_calendar_month_windows_skips_partial_start_month() -> None:
 
 def test_start_of_local_day_and_next() -> None:
     local_date = date(2026, 5, 22)
-    start = start_of_local_day(local_date, IST)
-    end = start_of_next_local_day(local_date, IST)
-    assert start == datetime(2026, 5, 22, 0, 0, tzinfo=IST)
-    assert end == datetime(2026, 5, 23, 0, 0, tzinfo=IST)
+    start = start_of_local_day(local_date, SCOPE_TZ)
+    end = start_of_next_local_day(local_date, SCOPE_TZ)
+    assert start == datetime(2026, 5, 22, 0, 0, tzinfo=SCOPE_TZ)
+    assert end == datetime(2026, 5, 23, 0, 0, tzinfo=SCOPE_TZ)
 
 
 def test_coerce_to_date() -> None:
     assert coerce_to_date(None) is None
     assert coerce_to_date(date(2026, 5, 1)) == date(2026, 5, 1)
-    assert coerce_to_date(datetime(2026, 5, 1, 12, 0, tzinfo=IST)) == date(2026, 5, 1)
+    assert coerce_to_date(datetime(2026, 5, 1, 12, 0, tzinfo=SCOPE_TZ)) == date(2026, 5, 1)
     assert coerce_to_date('2026-05-01') == date(2026, 5, 1)
-    assert coerce_to_date('2026-05-01T00:00+05:30') == date(2026, 5, 1)
+    assert coerce_to_date('2026-05-01T00:00+05:45') == date(2026, 5, 1)

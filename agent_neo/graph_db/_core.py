@@ -110,7 +110,7 @@ def reconnect_graph_db_if_needed(graph_db_config: GraphDbConfig) -> None:
 
 
 def _quiet_neo4j_install_enabled() -> bool:
-    """Suppress neomodel ``install_all_labels`` chatter (populate sets this by default)."""
+    """Suppress neomodel ``install_all_labels`` output; on by default, set AGENT_NEO_QUIET_NEO4J_INSTALL to 0/false/no/off to show it."""
     return os.environ.get('AGENT_NEO_QUIET_NEO4J_INSTALL', '1').lower() not in (
         '0',
         'false',
@@ -441,10 +441,10 @@ def retry_neo4j_cluster_operation(
     The four tuning knobs default to ``None`` and are resolved from the
     ``NEO4J_CLUSTER_LEADER_SWITCH_*`` module globals **inside the body**, at call
     time. This is a correctness requirement, not a performance one: binding them as
-    parameter defaults reads the globals once, at ``def`` time, so a consumer that
-    tunes retries by assigning to those globals — which is the documented way to
-    tune them — changed nothing the retry loop read, while ``connect_db`` printed
-    the assigned values. The log claimed a tuning that was not in effect.
+    parameter defaults reads the globals once, at ``def`` time, so reassigning
+    ``agent_neo.graph_db._core.NEO4J_CLUSTER_LEADER_SWITCH_*`` at runtime changed
+    nothing the retry loop read, while ``connect_db`` printed the assigned values.
+    The log claimed a tuning that was not in effect.
 
     An explicit argument still wins over the global, so every existing call site
     behaves exactly as before.
@@ -896,7 +896,7 @@ def batched_cypher_execute(
             budgets coincide, and the chunks are exactly ``batch_size`` rows —
             the same division a hand-rolled slice loop produces.
         verb: Progress/log verb, e.g. ``"Adding"``.
-        label: Progress/log noun, e.g. ``"Asset-to-Point"``.
+        label: Progress/log noun, e.g. ``"relationships"``.
         timer_enabled: Log start/elapsed for the whole call.
         batch_size: Per-chunk budget, applied to items **and** rows.
         allow_row_split: Divide a single over-budget row instead of shipping it

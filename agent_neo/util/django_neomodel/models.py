@@ -19,7 +19,7 @@ __all__: tuple[LiteralString, ...] = (
 
 
 class _ZoneNamePreservingTzInfo(_tzinfo_base):
-    """A tzinfo that preserves the named zone (e.g. ``Asia/Kolkata``) while
+    """A tzinfo that preserves the named zone (e.g. ``Asia/Kathmandu``) while
     using a pre-computed UTC offset, so the Neo4j driver's
     ``DateTime._utc_offset`` (which calls ``tzinfo.utcoffset(neo4j_datetime)``
     and crashes in CPython's ``_zoneinfo`` C extension for ``ZoneInfo``) never

@@ -5,8 +5,9 @@ coordinates (scope, subject, period bounds, temporal_granularity, day/hour class
 selection) plus serving-side time-freshness (distinct from lineage ``needs_redo``). Given the
 scope timezone it resolves to a maturity-clamped sequence of :class:`AnalyticalProductIdentity` slots.
 
-Rationale: no force-redo/recompute knob — invalidation is only via lineage/freshness gates
-on ensure-on-read.
+Design note: the request has no argument that forces recomputation; a stored instance is
+recomputed only when the lineage, input-drift (``needs_redo``) or freshness gate fails during
+ensure-on-read.
 
 Window resolution and maturity clamping live in :mod:`agent_neo.util.datetime`; this module
 composes them into :class:`AnalyticalProductRequest`.
@@ -20,7 +21,7 @@ from datetime import datetime, tzinfo
 from typing import LiteralString
 
 from agent_neo.util.datetime import (
-    TELEMETRY_LAG_MATURITY_MINUTES,
+    DEFAULT_MATURITY_MINUTES,
     TemporalGranularity,
     VALID_TEMPORAL_GRANULARITIES,
     period_windows_for_range,
@@ -71,7 +72,7 @@ class AnalyticalProductRequest:
         scope_name: str,
         local_tz: tzinfo,
         now: datetime | None = None,
-        maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+        maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
     ) -> list[AnalyticalProductIdentity]:
         """Resolve this request to its maturity-clamped sequence of computed-node identities.
 

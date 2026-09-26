@@ -20,7 +20,7 @@ from neo4j.time import DateTime as Neo4jDateTime
 from agent_neo.util.django_neomodel.models import coerce_to_fixed_offset_for_neo4j
 
 
-SCOPE_ZONE = ZoneInfo("Asia/Kolkata")
+SCOPE_ZONE = ZoneInfo("Asia/Kathmandu")
 SCOPE_LOCAL_DATETIME = datetime(2026, 5, 1, 9, 0, tzinfo=SCOPE_ZONE)
 
 
@@ -44,7 +44,7 @@ def test_installed_neo4j_driver_version_is_recorded() -> None:
 def test_zoneinfo_utcoffset_accepts_python_datetime() -> None:
     offset = SCOPE_LOCAL_DATETIME.utcoffset()
     assert offset is not None
-    assert offset.total_seconds() == 5.5 * 3600
+    assert offset.total_seconds() == 5.75 * 3600
 
 
 @pytest.mark.unit
@@ -61,9 +61,9 @@ def test_upstream_zoneinfo_neo4j_datetime_still_segfaults_in_subprocess() -> Non
         from zoneinfo import ZoneInfo
         from neo4j.time import DateTime as Neo4jDateTime
 
-        scope_local_datetime = datetime(2026, 5, 1, 9, 0, tzinfo=ZoneInfo("Asia/Kolkata"))
+        scope_local_datetime = datetime(2026, 5, 1, 9, 0, tzinfo=ZoneInfo("Asia/Kathmandu"))
         native = Neo4jDateTime.from_native(scope_local_datetime)
-        ZoneInfo("Asia/Kolkata").utcoffset(native)
+        ZoneInfo("Asia/Kathmandu").utcoffset(native)
         print("unexpected success")
         """
     )
@@ -89,7 +89,7 @@ def test_from_native_zoneinfo_without_coercion_still_unsafe_in_subprocess() -> N
         from zoneinfo import ZoneInfo
         from neo4j.time import DateTime as Neo4jDateTime
 
-        scope_local_datetime = datetime(2026, 5, 1, 9, 0, tzinfo=ZoneInfo("Asia/Kolkata"))
+        scope_local_datetime = datetime(2026, 5, 1, 9, 0, tzinfo=ZoneInfo("Asia/Kathmandu"))
         converted = Neo4jDateTime.from_native(scope_local_datetime)
         print(converted.utc_offset())
         """
@@ -105,7 +105,7 @@ def test_from_native_zoneinfo_with_coercion_is_stable() -> None:
     assert converted.tzinfo is not None
     zone_key = getattr(coerced.tzinfo, "key", None)
     if zone_key:
-        assert zone_key == "Asia/Kolkata"
+        assert zone_key == "Asia/Kathmandu"
     assert converted.utc_offset() is not None
 
 

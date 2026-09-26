@@ -1,6 +1,6 @@
 """Product layer: Concept / Ask / Identity / Instance / Refuse.
 
-Playground stub — no persistence, no force-redo knob.
+Playground stub — no persistence.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ class Concept:
 
 @dataclass(frozen=True, slots=True)
 class Ask:
-    """Canonical ask — no force-redo / recompute knob.
+    """Canonical ask. Recompute is derived from lineage + Gate; the Ask carries no override.
 
     Invalidation is only via lineage + Gate (maturity / freshness).
     Policy *values* (staleness bound, maturity lag) are slots for domain packs.

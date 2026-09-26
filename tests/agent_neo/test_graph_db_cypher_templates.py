@@ -81,9 +81,8 @@ def test_spine_window_where_clauses_omit_algorithm_version() -> None:
         local_period_start_gte='2026-01-01T00:00',
         local_period_start_lt='2026-02-01T00:00',
     )
-    # The de-domaining refactor renamed the keyword argument but not the graph
-    # property, so the clause still reads the legacy `facility_name` db_property while the bound
-    # parameter is `scope_name`.
+    # The stored property keeps its legacy name (SCOPE_NAME_DB_PROPERTY) while the
+    # bound parameter is `scope_name`.
     assert 'n.facility_name = $scope_name' in clauses
     assert 'n.local_period_start >= $local_period_start_gte' in clauses
     assert 'algorithm_version' not in params
@@ -99,7 +98,7 @@ def test_merge_template_has_unwind() -> None:
 @patch('agent_neo.graph_db.period_rollup_bulk.cypher_write')
 def test_merge_period_rollup_rows_uses_default_template(mock_write: MagicMock) -> None:
     written = merge_period_rollup_rows_cypher(
-        'ExampleApp_Analytical_DailyMetricSet',
+        'DailyTotalMetricSet',
         [{'cache_key': 'k1', 'facility_name': 'F'}],
         chunk_size=500,
     )

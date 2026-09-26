@@ -26,7 +26,7 @@ __all__: tuple[LiteralString, ...] = (
 # ----------------------------------------------------------------------------
 # Layer kinds (SOURCE → VIEW layered stack)
 # ----------------------------------------------------------------------------
-# SOURCE=0 = batched raw point/time coverage (the lineage leaf; not a computed node);
+# SOURCE=0 = batched raw source observations over time (the lineage leaf; not a computed node);
 # FACT=1 = closest-to-source facts; METRIC=2 = derived metric rollups;
 # INTERPRETATION=3 = interpretation; VIEW=4 = question/report view.
 

@@ -1,8 +1,8 @@
 """Tests that retry tuning is resolved at call time, not at ``def`` time.
 
-This is a correctness contract, not a performance one. The documented way to tune
-the cluster retry is to assign to the ``NEO4J_CLUSTER_LEADER_SWITCH_*`` module
-globals — which is what a consumer's bootstrap does. While those values were bound
+This is a correctness contract, not a performance one. Reassigning the
+``NEO4J_CLUSTER_LEADER_SWITCH_*`` globals on ``agent_neo.graph_db._core`` at runtime
+must reach the retry loop. While those values were bound
 as parameter defaults, that assignment reached ``connect_db``'s log message and
 nothing else: the retry loop kept using whatever the globals held at import. The
 log announced a tuning that was not in force.
@@ -28,7 +28,7 @@ class _CountingTransientOperation:
 
 
 def _reassign_globals(monkeypatch: pytest.MonkeyPatch, **tuning: float) -> None:
-    """Reassign the module globals, the way a consumer's bootstrap does.
+    """Reassign the module globals, as runtime tuning would.
 
     Keyed by the parameter names the retry function exposes, so each test reads as
     "this knob, set this way, must be the one the loop uses".

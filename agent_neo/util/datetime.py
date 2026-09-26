@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 __all__: tuple[LiteralString, ...] = (
     'TemporalGranularity',
     'VALID_TEMPORAL_GRANULARITIES',
-    'TELEMETRY_LAG_MATURITY_MINUTES',
+    'DEFAULT_MATURITY_MINUTES',
     'epoch_seconds',
     'coerce_to_date',
     'coerce_to_local_tz',
@@ -49,8 +49,10 @@ __all__: tuple[LiteralString, ...] = (
 )
 
 
-# Minutes after a local period ends before ensure-on-read ``.get()`` treats it as complete.
-TELEMETRY_LAG_MATURITY_MINUTES: int = 30
+#: Minutes after a local period ends before ensure-on-read ``.get()`` treats it as
+#: complete. A policy value, not a law: it should match how late your source data
+#: typically lands. Every resolver below takes ``maturity_minutes`` to override it.
+DEFAULT_MATURITY_MINUTES: int = 30
 
 
 class TemporalGranularity(StrEnum):
@@ -124,7 +126,7 @@ def parse_local_datetime_from_iso(raw_period_start: str, *, tz: tzinfo) -> datet
 
 
 def tz_offset_key_segment(local_tz_offset_hours: float) -> str:
-    """Compact signed offset for cache keys, e.g. ``+5.5``, ``-8``."""
+    """Compact signed offset for cache keys, e.g. ``+5.75``, ``-3``, ``+0``."""
     return f'{local_tz_offset_hours:+g}'
 
 
@@ -299,8 +301,7 @@ def period_anchor(*, temporal_granularity: str, local_period_start: datetime) ->
     """Canonical, collision-free string anchoring a period at a given temporal_granularity.
 
     The anchor is derived **only** from the aligned period start, so two requests that resolve
-    to the same period produce the same key regardless of how their bounds were expressed
-    (``concretized/IDENTITY-CACHE-KEY.md`` — period-bound canonicalization).
+    to the same period produce the same key regardless of how their bounds were expressed.
     """
     if temporal_granularity == TemporalGranularity.HOURLY:
         return local_period_start.strftime('%Y-%m-%dT%H:00')
@@ -404,7 +405,7 @@ def latest_eligible_exclusive_period_end(
     temporal_granularity: str,
     local_tz: tzinfo,
     now: datetime | None = None,
-    maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+    maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
 ) -> datetime:
     """Exclusive end of the latest finished local period eligible for ensure-on-read ``.get()``."""
     local_now = _scope_local_now(local_tz=local_tz, now=now)
@@ -427,7 +428,7 @@ def latest_eligible_inclusive_daily_date(
     *,
     local_tz: tzinfo,
     now: datetime | None = None,
-    maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+    maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
 ) -> date:
     """Latest scope-local calendar day eligible for daily ensure-on-read ``.get()``."""
     local_to_exclusive = latest_eligible_exclusive_period_end(
@@ -443,7 +444,7 @@ def latest_eligible_inclusive_month_string(
     *,
     local_tz: tzinfo,
     now: datetime | None = None,
-    maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+    maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
 ) -> str:
     """Latest ``YYYY-MM`` month eligible for monthly ensure-on-read ``.get()``."""
     local_to_exclusive = latest_eligible_exclusive_period_end(
@@ -466,7 +467,7 @@ def resolve_hourly_get_datetime_range(
     *,
     local_tz: tzinfo,
     now: datetime | None = None,
-    maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+    maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
 ) -> tuple[datetime, datetime]:
     """Resolve scope-local ``[from, to)`` for hourly ensure-on-read ``.get()``."""
     eligible_to_exclusive = latest_eligible_exclusive_period_end(
@@ -507,7 +508,7 @@ def resolve_daily_get_date_range(
     *,
     local_tz: tzinfo,
     now: datetime | None = None,
-    maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+    maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
 ) -> tuple[date, date]:
     """Resolve inclusive calendar ``from_date`` .. ``to_date`` for daily ensure-on-read ``.get()``."""
     eligible_to_date = latest_eligible_inclusive_daily_date(
@@ -538,7 +539,7 @@ def resolve_monthly_get_month_range(
     *,
     local_tz: tzinfo,
     now: datetime | None = None,
-    maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+    maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
 ) -> tuple[str, str]:
     """Resolve inclusive ``YYYY-MM`` range for monthly ensure-on-read ``.get()``."""
     eligible_to_month = latest_eligible_inclusive_month_string(
@@ -570,7 +571,7 @@ def resolve_window_for_temporal_granularity(
     temporal_granularity: str,
     local_tz: tzinfo,
     now: datetime | None = None,
-    maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+    maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
 ) -> tuple[datetime, datetime]:
     """Resolve scope-local ``[from, to)`` for any temporal_granularity, clamping ``to`` to latest mature.
 
@@ -638,7 +639,7 @@ def is_period_mature_for_production(
     temporal_granularity: str,
     local_tz: tzinfo,
     now: datetime | None = None,
-    maturity_minutes: int = TELEMETRY_LAG_MATURITY_MINUTES,
+    maturity_minutes: int = DEFAULT_MATURITY_MINUTES,
 ) -> bool:
     """Populate-side maturity gate: may this finished period be persisted as settled?
 

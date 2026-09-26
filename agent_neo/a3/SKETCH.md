@@ -65,13 +65,13 @@ Invalidate / Gate / Retire / Explain cut across the above.
 | **Rank** | Order rows by score |
 | **Project** | Metric Instance → View payload (serving boundary) |
 | **Compose** | Multi-product answer graph; may not persist |
-| **Invalidate** | Mark needs-redo / cascade; **no force-redo knob** |
+| **Invalidate** | Mark needs-redo / cascade (redo is derived, never requested) |
 | **Gate** | Policy stop → `Refuse` (immature, stale, authority, …) |
 | **Retire** | Mint-new; flip prior to retired (no in-place mutate) |
 | **Explain** | Structured provenance trail (not a Cypher walk) |
 
 **Domain-pack slot (not kernel):** `Interpret` — threshold/status rules over
-Metrics. Facility NLP and Present/markdown stay out of A3.
+Metrics. Natural-language interpretation and presentation stay out of A3.
 
 ---
 
@@ -94,7 +94,7 @@ See `laws.py` for property-test intent strings.
 ## Non-goals
 
 - Replacing Cypher / NeoModel persistence
-- Shipping policy *values* (maturity minutes, operating hours) — only slots
+- Shipping policy *values* (maturity lag, classification windows) — only slots
 - Importing any one project’s requirements corpus
 - Full term language for Concepts (open question in the charter)
 - Wiring these stubs into `analytical_product` in this commit
@@ -103,7 +103,7 @@ See `laws.py` for property-test intent strings.
 
 ## Relation to `analytical_product`
 
-The unfinished construction site already has a strong **interpreter** shape
+`analytical_product` already has a strong **interpreter** shape
 (Request → Identity → get/serve → three gates → cascade). This sketch names the
 **algebra** that interpreter should eventually obey so agents compose inside
-laws instead of cloning the last MetricSet file.
+laws instead of cloning the last product class.

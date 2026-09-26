@@ -23,23 +23,23 @@ def test_a_plain_return_yields_its_aliases() -> None:
 
 
 def test_a_header_block_above_the_query_is_not_part_of_the_query() -> None:
-    """The shape every governed `.cypher` file uses: title, parameters, columns.
+    """A documented header block (title, parameters, returned columns) above the query.
 
     The header names the columns in prose, and the prose must not be mistaken for
     the projection.
     """
     query = (
-        '// Read chunks by identity key.\n'
+        '// Read items by key.\n'
         '//\n'
         '// Parameters:\n'
-        '//   $chunk_keys (list[str]): identity keys (required)\n'
+        '//   $keys (list[str]): item keys (required)\n'
         '//\n'
         '// Returns:\n'
-        '//   chunk_key: the identity key\n'
-        '//   is_empty: true when the window carries no samples\n'
-        'MATCH (n) RETURN n.chunk_key AS chunk_key, n.is_empty AS is_empty'
+        '//   key: the item key\n'
+        '//   label: the item label\n'
+        'MATCH (n) RETURN n.key AS key, n.label AS label'
     )
-    assert _parse_return_headers(query) == ['chunk_key', 'is_empty']
+    assert _parse_return_headers(query) == ['key', 'label']
 
 
 def test_a_comment_inside_the_return_clause_does_not_truncate_it() -> None:

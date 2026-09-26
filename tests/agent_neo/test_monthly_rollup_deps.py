@@ -37,7 +37,7 @@ def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
         local_period_start=datetime(2026, 5, 1),
         local_period_end=datetime(2026, 6, 1),
         day_classif='weekday',
-        hour_classif='operating',
+        hour_classif='class-a',
     )
     indexed_instances = prefetch_daily_instances_by_cache_key(
         ensure_instances=ensure_instances,
@@ -50,7 +50,7 @@ def test_prefetch_daily_instances_by_cache_key_builds_daily_request() -> None:
     assert daily_request.subject_kind == 'group'
     assert daily_request.subject_key == 's1'
     assert daily_request.day_classif == 'weekday'
-    assert daily_request.hour_classif == 'operating'
+    assert daily_request.hour_classif == 'class-a'
     assert indexed_instances == {
         'daily-a': _StubInstance(cache_key='daily-a'),
         'daily-b': _StubInstance(cache_key='daily-b'),

@@ -37,6 +37,7 @@ from neomodel.properties import (
 from neomodel.sync_.database import db
 
 from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
+from agent_neo.graph_db.cypher_templates import SCOPE_NAME_DB_PROPERTY
 from agent_neo.util.django_neomodel.models import DjangoNeoModelWithCreatedAndUpdatedProps
 from agent_neo.util.datetime import coerce_to_utc, coerce_to_utc_for_neo4j_datetime
 
@@ -68,7 +69,7 @@ __all__: tuple[LiteralString, ...] = (
 
 
 #: Lineage edge types whose *upstream* target, when ``updated`` more recently than
-#: this instance was ``computed_at``, means the instance ``needs_redo`` (E6/E7
+#: this instance was ``computed_at``, means the instance ``needs_redo`` (the
 #: input-drift gate). Mirrors the cascade engine's ``_CASCADE_REL_TYPES``: the
 #: unified instance-level ``DEPENDS_ON`` graph (peer computed instances and
 #: source-layer leaves) plus the ``computes_concept`` bridge to each instance's design node.
@@ -84,7 +85,7 @@ _INPUT_REL_PATTERN: str = '|'.join((
 
 @dataclass(slots=True)
 class ComputedNodeResult:
-    """The output of a family's ``_compute``: the payload plus the lineage to wire (E6).
+    """The output of a family's ``_compute``: the payload plus the lineage to wire.
 
     ``payload`` holds the family-specific scalar/JSON fields to persist on the instance (e.g.
     ``{'value': 12.3, 'calculation_method': ...}``). The engine sets identity/lifecycle fields itself.
@@ -173,11 +174,9 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         label='Logical slot id',
         help_text='Deterministic over (scope, subject, temporal_granularity, window) — not over the concept.',
     )
-    # ``db_property='facility_name'`` is a legacy on-disk alias, not a domain
-    # assumption: the API surface is ``scope_name``. Renaming the stored property would
-    # require a coordinated Neo4j data migration on already-deployed graphs, so the
-    # alias stays until such a migration is scheduled. New code reads ``scope_name``.
-    scope_name: Property = StringProperty(required=True, index=True, db_property='facility_name')
+    # Stored under ``SCOPE_NAME_DB_PROPERTY`` (see its definition for why it differs
+    # from the attribute name). Code reads and writes ``scope_name``.
+    scope_name: Property = StringProperty(required=True, index=True, db_property=SCOPE_NAME_DB_PROPERTY)
     subject_kind: Property = StringProperty(required=True, index=True)
     subject_key: Property = StringProperty(required=True, index=True)
     product_kind: Property = StringProperty(required=True, index=True)
@@ -242,7 +241,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 
     @classmethod
     def serve(cls, scope: AnalyticalProductScope, request: AnalyticalProductRequest) -> list[dict[str, Any]]:
-        """Boundary-checked serving form (E2/E11): Views only."""
+        """Boundary-checked serving form: Views only."""
         if not cls.layer().is_served:
             raise TypeError(
                 f'{cls.__name__} is a {cls.layer().label}-layer node and cannot be served directly; '
@@ -288,7 +287,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         }
 
     # ------------------------------------------------------------------
-    # Probe + validity gates (E6 lineage / E7 freshness)
+    # Probe + validity gates (lineage, input drift, freshness)
     # ------------------------------------------------------------------
 
     @classmethod
@@ -308,7 +307,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 
     @classmethod
     def _is_valid(cls, instance: Any, *, identity: AnalyticalProductIdentity, request: AnalyticalProductRequest) -> bool:
-        """A served instance is valid iff **all three** independent gates pass (E6 + E7)."""
+        """A served instance is valid iff **all three** independent gates pass."""
         return (
             not cls._lineage_needs_redo(instance)
             and not cls._inputs_need_redo(instance)
@@ -317,7 +316,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 
     @classmethod
     def _inputs_need_redo(cls, instance: Any) -> bool:
-        """Input-drift ``needs_redo`` gate (E6/E7): True iff a direct upstream input changed since compute."""
+        """Input-drift ``needs_redo`` gate: True iff a direct upstream input changed since compute."""
         element_id = getattr(instance, 'element_id', None)
         if not element_id:
             return False
@@ -342,7 +341,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 
     @classmethod
     def _lineage_needs_redo(cls, instance: Any) -> bool:
-        """Lineage ``needs_redo`` predicate (E6)."""
+        """Lineage ``needs_redo`` predicate."""
         from neomodel.exceptions import CardinalityViolation
 
         if getattr(instance, 'needs_redo_since', None) is not None:
@@ -378,7 +377,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
 
     @classmethod
     def _is_age_fresh(cls, instance: Any, *, identity: AnalyticalProductIdentity, freshness: Any) -> bool:
-        """Time-freshness gate (E7): is this stored instance still appropriate for the enquiry?"""
+        """Time-freshness gate: is this stored instance still appropriate for the enquiry?"""
         now = datetime.now(tz=UTC)
         if freshness.max_staleness is None:
             return True
@@ -388,7 +387,7 @@ class AbstractAnalyticalComputedProduct(DjangoNeoModelWithCreatedAndUpdatedProps
         return (now - computed_at) <= freshness.max_staleness
 
     # ------------------------------------------------------------------
-    # Persistence + lineage wiring + retirement (E1 + E6)
+    # Persistence + lineage wiring + retirement
     # ------------------------------------------------------------------
 
     @classmethod

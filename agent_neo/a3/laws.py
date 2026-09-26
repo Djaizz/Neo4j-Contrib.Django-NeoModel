@@ -94,9 +94,9 @@ Updating a product always mints a successor Instance and flips the prior to
 LifecycleStatus.RETIRED. Payload fields of the prior node are never rewritten.
 """
 
-LAW_NO_FORCE_REDO = """
-Ask has no force_redo / recompute flag. Redo only via Invalidate → needs_redo
-and Gate failure on stale / immature windows.
+LAW_REDO_DERIVED = """
+An Instance is recomputed iff Invalidate marked it needs_redo or a Gate (maturity /
+freshness) fails on the resolved window. The Ask carries no override.
 """
 
 
@@ -106,7 +106,7 @@ __all__ = (
     'LAW_ENSURE_IDEMPOTENT',
     'LAW_LIFT_LOWER_ROUNDTRIP',
     'LAW_NO_COMBINE_ON_LOWERED',
-    'LAW_NO_FORCE_REDO',
+    'LAW_REDO_DERIVED',
     'LAW_RETIRE_NOT_MUTATE',
     'LAW_ROLL_DIMENSION_COMMUTE',
     'LAW_ROLL_REQUIRES_PARTITION',

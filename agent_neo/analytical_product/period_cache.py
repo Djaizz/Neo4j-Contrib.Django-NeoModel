@@ -48,11 +48,10 @@ class PeriodCacheCoreMixin:
         self,
         *,
         period_index_prefix: str = '_period_bulk_index_',
-        hourly_index_prefix: str = '_hourly_bulk_index_',
     ) -> None:
         """Drop instance-scoped bulk indexes (call at start/end of each populate day)."""
         for attr_name in list(vars(self)):
-            if attr_name.startswith(period_index_prefix) or attr_name.startswith(hourly_index_prefix):
+            if attr_name.startswith(period_index_prefix):
                 delattr(self, attr_name)
 
     def _period_bulk_index_or_none(self, label: str, *, index_prefix: str = '_period_bulk_index_') -> dict[str, dict[str, Any]] | None:

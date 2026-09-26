@@ -94,7 +94,7 @@ def test_every_flat_row_reaches_a_statement_exactly_once_and_in_order() -> None:
 
 
 def test_flat_row_results_are_accumulated_across_chunks() -> None:
-    """What a ``read_back=False`` caller counts to confirm its write landed."""
+    """What a caller that does not re-read its writes counts to confirm they landed."""
     with patch('agent_neo.graph_db._core.db') as mock_db:
         mock_db.cypher_query.return_value = ([['written']], None)
         results = batched_cypher_execute(
@@ -105,7 +105,7 @@ def test_flat_row_results_are_accumulated_across_chunks() -> None:
 
 
 def test_count_key_is_still_honoured_when_given() -> None:
-    """The default must not change the behaviour of the 16 existing call sites."""
+    """The default must not change the behaviour of callers that pass a count_key."""
     rows = [
         {'source': 'a', 'targets': [1, 2, 3, 4]},
         {'source': 'b', 'targets': [1, 2, 3, 4]},

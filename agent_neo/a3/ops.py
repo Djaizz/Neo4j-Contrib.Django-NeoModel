@@ -37,7 +37,7 @@ class Ensure(Protocol):
 
     Resolve Ask → Identity (or Identities). For each: if a valid Instance exists
     and Gate passes, serve it; else compute → persist → Retire prior official.
-    Never accept a force-redo flag — redo only via Invalidate + Gate.
+    Redo is derived: only Invalidate + Gate trigger recompute.
     """
 
     def ensure(self, ask: Ask) -> Instance | Refuse:
@@ -175,7 +175,7 @@ class Compose(Protocol):
 
 
 class Invalidate(Protocol):
-    """Lineage mark: needs_redo / cascade. No force-redo knob."""
+    """Lineage mark: needs_redo / cascade."""
 
     def invalidate(
         self,

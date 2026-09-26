@@ -13,6 +13,7 @@ from neomodel.sync_.database import db
 
 from agent_neo.analytical_product.registry import iter_registered_analytical_product_classes
 from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
+from agent_neo.graph_db.cypher_templates import SCOPE_NAME_DB_PROPERTY
 from agent_neo.util.datetime import TemporalGranularity, epoch_seconds
 
 from .enum import GraphEdgeKind, NodeLifecycleStatus
@@ -199,7 +200,7 @@ def find_inputs_changed_needs_redo(
     impact set.
     """
     rel_pattern = '|'.join(_CASCADE_REL_TYPES)
-    scope_filter = '' if scope_name is None else 'AND dependent.facility_name = $scope_name '
+    scope_filter = '' if scope_name is None else f'AND dependent.{SCOPE_NAME_DB_PROPERTY} = $scope_name '
     # Depth-1 timestamp comparison: a dependent is drifted iff some direct input's
     # ``updated`` is newer than the dependent's ``computed_at`` (own ``updated`` then
     # 0 as fallbacks). All compared fields are epoch-second floats.
@@ -253,7 +254,7 @@ def collect_needs_redo_impacts(*, scope_name: str | None = None) -> list[Cascade
     batch of corrections) without re-walking lineage. Scope to ``scope_name`` to avoid a
     full-store scan whenever possible.
     """
-    scope_filter = "" if scope_name is None else 'AND n.facility_name = $scope_name '
+    scope_filter = "" if scope_name is None else f'AND n.{SCOPE_NAME_DB_PROPERTY} = $scope_name '
     query = (
         'MATCH (n) WHERE n.needs_redo_since IS NOT NULL '
         f'AND {_cypher_lifecycle_in_circulation("n")} '
@@ -430,7 +431,8 @@ def _group_for_meta(product_cls: type, meta: _ImpactMeta) -> _RecomputeGroup | N
     if not (meta.temporal_granularity and meta.subject_kind and meta.subject_key and meta.local_period_start):
         return None
     # Hourly resolvers treat the upper bound exclusively; daily/weekly/monthly
-    # treat it inclusively at the lower-of-window. Mirror ``_span_upper_bound``.
+    # treat it inclusively at the lower-of-window, so for those the period start
+    # alone re-selects exactly this one period.
     local_period_end = meta.local_period_end if meta.temporal_granularity == TemporalGranularity.HOURLY else meta.local_period_start
     if local_period_end is None:
         local_period_end = meta.local_period_start
