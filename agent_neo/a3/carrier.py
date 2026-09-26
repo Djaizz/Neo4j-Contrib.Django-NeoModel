@@ -1,53 +1,100 @@
-"""Carrier: sparse coordinates with coverage for analytical values.
+"""Coordinates: the address space of the algebra.
 
-Playground stub — contracts only. No storage.
+A coordinate names one analytical cell: a scope, a subject at some level (its kind), a
+period at some granularity, and zero or more classifications. It is hashable, so it can
+key a :class:`~agent_neo.a3.algebra.Carrier`; it carries no value and no coverage — those
+belong to the carrier, and coverage is derived there rather than stored here.
+
+``Absent`` is the algebra's answer for "no value": distinct from zero, distinct from an
+empty collection, and never the output of any fold that had nothing to fold.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Generic, Hashable, Iterator, Mapping, TypeVar
-
+from typing import Iterable, Mapping, Self
 
 __all__ = (
+    'ABSENT',
     'Absent',
-    'Carrier',
+    'Classifications',
     'Coordinate',
-    'Coverage',
     'CoverageState',
+    'Dimension',
+    'freeze_classifications',
 )
 
 
-T = TypeVar('T')
-
 
 class Absent:
-    """Sentinel for a coordinate with no value (distinct from zero / empty)."""
+    """The value of a coordinate that has none — distinct from zero and from an empty
+    collection, and the only value a fold over nothing produces. A singleton: ``Absent()``
+    is ``ABSENT``."""
 
     __slots__ = ()
+    _instance: Absent | None = None
+
+    def __new__(cls) -> Self:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __repr__(self) -> str:
         return 'Absent'
+
+    def __bool__(self) -> bool:
+        return False
 
 
 ABSENT: Absent = Absent()
 
 
 class CoverageState(StrEnum):
-    """How much we know about a coordinate relative to its parent partition."""
+    """What a coverage report says about one coordinate."""
 
     KNOWN = 'known'
     MISSING = 'missing'
     DOUBLE_COUNTED = 'double_counted'
 
 
+Classifications = tuple[tuple[str, str], ...]
+
+
+def freeze_classifications(classifications: Mapping[str, str] | Iterable[tuple[str, str]]) -> Classifications:
+    """Canonical, hashable form of a classification set: name-sorted ``(name, value)`` pairs.
+
+    A coordinate must be usable as a dict key and as a member of a frozenset, so its
+    classifications cannot be a dict. Sorting by name also fixes the serialization order
+    the cache key relies on.
+    """
+    items = classifications.items() if isinstance(classifications, Mapping) else classifications
+    pairs = tuple(sorted((str(name), str(value)) for name, value in items))
+    names = [name for name, _ in pairs]
+    if len(names) != len(set(names)):
+        raise ValueError(f'duplicate classification names in {pairs!r}')
+    return pairs
+
+
+class Dimension(StrEnum):
+    """The two rollable dimensions of a coordinate.
+
+    Each is a ``(level, key)`` pair whose *level* is already a coordinate field — the
+    subject's kind, the period's granularity — which is what lets one :class:`Lattice`
+    protocol serve both: rolling up is moving to a coarser level along one dimension.
+    Classifications are the third axis; they are sliced, never rolled.
+    """
+
+    SUBJECT = 'subject'
+    PERIOD = 'period'
+
+
 @dataclass(frozen=True, slots=True)
 class Coordinate:
-    """Logical address of one analytical cell.
+    """Logical address of one analytical cell — hashable, so it can key a carrier.
 
-    Dimensions are open at the sketch level; domain packs bind concrete
-    subject kinds, granularities, and classification vocabularies.
+    Dimensions are open: domain packs bind concrete subject kinds, granularities and
+    classification vocabularies. The algebra only needs the shape.
     """
 
     scope_name: str
@@ -55,57 +102,37 @@ class Coordinate:
     subject_key: str
     temporal_granularity: str
     period_anchor: str
-    classifications: Mapping[str, str] = field(default_factory=dict)
+    classifications: Classifications = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'classifications', freeze_classifications(self.classifications))
+
+    @property
+    def subject(self) -> tuple[str, str]:
+        """``(level, key)`` along :attr:`Dimension.SUBJECT`."""
+        return (self.subject_kind, self.subject_key)
+
+    @property
+    def period(self) -> tuple[str, str]:
+        """``(level, key)`` along :attr:`Dimension.PERIOD`."""
+        return (self.temporal_granularity, self.period_anchor)
+
+    def along(self, dimension: Dimension) -> tuple[str, str]:
+        return self.subject if dimension is Dimension.SUBJECT else self.period
+
+    def moved(self, dimension: Dimension, level: str, key: str) -> Coordinate:
+        """The same coordinate at another ``(level, key)`` along one dimension."""
+        if dimension is Dimension.SUBJECT:
+            return replace(self, subject_kind=level, subject_key=key)
+        return replace(self, temporal_granularity=level, period_anchor=key)
+
+    def classification(self, name: str, default: str | None = None) -> str | None:
+        for key, value in self.classifications:
+            if key == name:
+                return value
+        return default
 
     def with_classifications(self, **updates: str) -> Coordinate:
         merged = dict(self.classifications)
         merged.update(updates)
-        return Coordinate(
-            scope_name=self.scope_name,
-            subject_kind=self.subject_kind,
-            subject_key=self.subject_key,
-            temporal_granularity=self.temporal_granularity,
-            period_anchor=self.period_anchor,
-            classifications=merged,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class Coverage:
-    """Partition awareness for a set of child coordinates under a parent.
-
-    ``Roll`` to a parent is legal only when children *partition* the parent:
-    no ``MISSING`` gaps and no ``DOUBLE_COUNTED`` overlap.
-    """
-
-    states: Mapping[Hashable, CoverageState]
-
-    def partitions_parent(self) -> bool:
-        """True when every tracked child is ``KNOWN`` (sketch: no holes/overlaps)."""
-        if not self.states:
-            return False
-        return all(state is CoverageState.KNOWN for state in self.states.values())
-
-
-@dataclass(slots=True)
-class Carrier(Generic[T]):
-    """Sparse map from coordinates to values, with optional coverage mask.
-
-    This is the uniform carrier the product ops act on — not a DB relation and
-    not a Cypher result set.
-    """
-
-    cells: dict[Coordinate, T | Absent] = field(default_factory=dict)
-    coverage: Coverage | None = None
-
-    def get(self, coordinate: Coordinate) -> T | Absent:
-        return self.cells.get(coordinate, ABSENT)
-
-    def set(self, coordinate: Coordinate, value: T | Absent) -> None:
-        self.cells[coordinate] = value
-
-    def coordinates(self) -> Iterator[Coordinate]:
-        return iter(self.cells)
-
-    def __len__(self) -> int:
-        return len(self.cells)
+        return replace(self, classifications=freeze_classifications(merged))

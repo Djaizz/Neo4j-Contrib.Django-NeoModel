@@ -2,15 +2,18 @@
 
 ## ADMINISTRATOR'S NOTES
 
-### Status: charter + playground sketch
+### Status: v1 implemented and law-tested; not yet bound to the interpreter
 
-This document records **why this layer should exist and what belongs in it**.
-Everything under "Intended shape" is still intent, not a shipped engine.
+The algebra exists as code: a hashable coordinate space, a carrier with derived coverage
+and two type tags, nine primitive operations closed over it, factored operators with a
+Gray classification, a lattice slot, three gates, a bridge in both directions, and a term
+language with a shape checker that decides every refusal before a value is read. Thirty-one
+laws in `laws.py`, each executable in `tests/agent_neo/a3/`. Module map and the
+decision record: [`SKETCH.md`](SKETCH.md).
 
-**Playground sketch** (typed stubs, storage-agnostic): see [`SKETCH.md`](SKETCH.md)
-and the sibling modules `carrier.py`, `operators.py`, `product.py`, `ops.py`,
-`laws.py`. Names and contracts only — no Neo4j/Django wiring, no bind into
-`analytical_product` yet.
+Not yet done: binding `agent_neo.analytical_product` to it (a `Resolver`, a `Store`, a
+calendar lattice, `Field` declarations on existing products). The shared enums and the key
+scheme are bound and tested; the rest is listed at the end of `SKETCH.md`.
 
 ### Design aspiration
 
@@ -122,8 +125,7 @@ package. The eleven modules that *do* bind — `abstract.py`,
 `dependency_registry.py`, `period_spine.py`, `graph_db/_core.py` — are the
 interpreter.
 
-A3's first increment is therefore mostly **naming a split that already exists**,
-not inventing one.
+The first increments took the shared vocabulary and the key scheme; `SKETCH.md` lists what remains to bind.
 
 ## What makes it *agentic*
 
@@ -232,40 +234,45 @@ must be computed after the fold), and it surfaces a live side condition: a linea
 Time-varying rates break it, and nothing in a registry of bare callables would
 notice.
 
-## Intended shape (not yet built)
+## Shape, as built
 
 ```
 a3/
-  algebra/      quantity + accumulator types, operator registry with laws,
-                composition typecheck
-  carrier/      the coordinate space: scope lattice, time lattice,
-                classification dimensions, coverage
-  product/      Concept (design node) vs Computed Instance (run-time node),
-                identity, lifecycle vocabulary
-  gates/        maturity | freshness | invalidation — three separable gates
-  lineage/      dependency model, cascade semantics (mark-then-lazy-recompute)
-  governance/   authority boundaries + conformance runner
+  carrier.py    Coordinate (two rollable Dimensions + classifications), Absent
+  algebra.py    Carrier (expected · operator tag · lowered_from · provenance · gaps)
+                lift relift roll restrict classify rekey map join lower | slice shift scale diff | rank | plan_roll
+  operators.py  Operator = lift/combine/lower + kind + partial_ok; Sum Count Min Max Mean WeightedMean
+                Proportion Percentile; OperatorRegistry
+  lattice.py    Lattice (up/down, multi-valued), MappingLattice
+  product.py    Layer LifecycleStatus · Concept (family, revision, Field roles, term) · Identity + KeyScheme
+                · Instance + LineageRef · Ask · Refuse · servable
+  gates.py      maturity | freshness | lineage → gate() → GateOutcome
+  bridge.py     Resolver, Store; carrier_from_instances, instances_from_carrier
+  term.py       Ensure Lift Relift Roll Restrict Slice Classify Shift Rekey Map Join Lower · Env · shape · evaluate
+  ops.py        Ensure Retire Invalidate — the contracts only a store can fulfil
+  laws.py       31 laws with hypotheses, each naming the block it forces
 ```
 
-Increment order, smallest decisive first:
+What was *removed* on the way, because no law forced it: a stored per-child coverage mask
+(coverage is derived from `expected` and the lattice); an `Identity` duplicating the
+coordinate's fields; an empty `Accumulator` marker; an operator `unit` (the empty fold is
+`Absent`); a `commutative` flag (commutativity is a precondition of every operator, since a
+fold runs over an unordered set); `Scale`, `Diff`, `Rank`, `Warm`, `Compose`, `Project`, `Explain` as
+primitives or contracts (the first three expand into `map`/`join`; a warm-up is a loop, a
+composition a `join`, the serving boundary a one-line `servable`, provenance a lookup on the
+carrier); a `Gate` protocol (three functions); four refuse reasons nothing produced; a
+duplicated lifecycle enum.
 
-1. **Name the split that already exists** — move in the modules that are
-   storage-agnostic **and** domain-agnostic: identity, enums, scope, registry.
-   Storage-agnostic is not the same thing: request resolution, freshness, the
-   datetime resolvers and the populate/projection helpers still ship policy
-   *defaults* (a maturity lag, a staleness bound) that the invariants below keep
-   out of A3. They move once those values become declared slots.
-2. **Add the accumulator to the operator model** — the one genuinely new piece,
-   and the one that makes ill-typed rollups unconstructible rather than merely
-   regrettable.
-3. **Ship the three-gate model as the headline abstraction** — maturity /
-   freshness / invalidation as three separately-testable gates; most systems
-   conflate the latter two.
-4. **A conformance runner, not a requirements corpus** — the generic asset is
-   "requirements execute and are checked in CI," never the specific requirements.
-
-Deliberately deferred: `join`, `compare`, `rank`, and anything resembling a term
-language. Those need the carrier settled first (see Open questions).
+What was *added*, because a law demanded it: the operator tag and `lowered_from`
+(`LAW_TAG_GUARDS_FOLD`, `LAW_REPORTED_NEVER_LIFTED`); `Field` roles on `Concept` so the bridge
+knows what a stored payload *is*; `classify`, `restrict` and `rekey` ("working hours only",
+period-over-period, peer-vs-peer); `relift`, the one lawful way a distributive operator's
+stored output re-enters a fold — and the one consumer of Gray's classification; a
+`classifiers` slot so a stored sliced product can roll up without its siblings; `on_missing`
+with a `PARTIAL` policy gated by `partial_ok`; a term language and a value-free `shape` so
+WHAT/HOW separation is real (`LAW_SHAPE_SOUND`); `LineageRef`s so the lineage gate decides
+from facts the store already holds; derived `depends_on` and `check_layers`, which finally
+give `Layer.may_depend_on` a consumer inside the algebra.
 
 ## Scope boundaries — where A3 stops
 
@@ -296,21 +303,22 @@ double-counting. A3 should make coverage a first-class, propagated property.
 Summing whatever children are found turns coverage gaps into silent
 undercounts.
 
-## Invariants (binding once code lands)
+## Invariants (binding, and tested)
 
-- **`a3` imports nothing from `neomodel`, `django`, or `agent_neo.graph_db`.**
-  Enforce it with an import-boundary test, not a convention. This is what keeps
-  the eventual package split cheap.
-- Every operator declares its accumulator type and its `(lift, combine, lower)`
-  factorization. An operator without one cannot be registered.
-- Composition laws ship as **property tests over generated carriers**, not as
-  prose — e.g. `roll(d₁, roll(d₂, c)) == roll(d₂, roll(d₁, c))` for independent
-  dimensions under a commutative-monoid `combine`.
-- A3 declares policy **slots** and never ships policy **values**.
-- A3 contains no domain requirement corpus. It contains the runner that checks
-  one.
-- Lifecycle vocabulary is exactly `official` / `provisional` / `retired`. No
-  fourth state, no supersession edge.
+- **`a3` imports only the standard library and itself**, and `import agent_neo.a3` succeeds
+  with Django, neomodel and the Neo4j driver masked — `test_import_boundary.py`. The
+  package's own `__init__` resolves its Django-bound names lazily for this reason.
+- Every operator declares `kind` and `partial_ok` and satisfies `lift`/`combine`/`lower`; a
+  holistic operator with no accumulator cannot be registered — `OperatorRegistry`.
+- Every law in `laws.py` has an executable test, or says it is an interpreter contract.
+- A3 declares policy **slots** (`max_staleness`, `maturity_lag`, `Env.now`, classifiers,
+  lattices) and ships no policy **values**.
+- A3 contains no project's requirements corpus and no domain vocabulary; the public leak
+  guard covers it.
+- Lifecycle vocabulary is exactly `official` / `provisional` / `retired`, defined once here
+  and re-exported by the interpreter.
+- `shape(t) is Refuse ⟺ evaluate(t) is Refuse`, with the same reason: every refusal is
+  decidable without a payload.
 
 ## Do not
 
@@ -329,25 +337,17 @@ undercounts.
 
 ## Open questions
 
-1. **The carrier — and this is load-bearing.** The working model is a sparse,
-   typed, multi-dimensional array over lattice-valued dimensions, with a coverage
-   mask. Whether that mask is part of the *value*, part of the *coordinate*, or a
-   third thing determines whether `join` is well-behaved at all. Settle this
-   before any binary operator is designed.
-2. **Packaging.** `a3` inside `agent_neo` ships an algebra inside a Django/Neo4j
-   distribution, which works against the goal of reuse beyond one project. Revisit
-   when a second consumer appears; until then the import boundary is the hedge.
-3. **Concept as recipe vs Concept as term.** A design-level Concept can hold a
-   Python method pointer (a recipe) or the term itself. If it held the term,
-   dependency edges would derive from free variables rather than hand
-   declaration, Concepts would become diffable, invalidation could narrow to
-   affected subterms, and explanation would be term pretty-printing. That is the
-   whole distance between a procedural codebase and an algebraic one. Not yet a
-   commitment.
-4. **Operator set beyond folds.** Folds along one dimension are only the start:
-   analytical questions routinely need `join`, `compare` (period-over-period,
-   peer-vs-peer) and `rank`, which otherwise end up as hand-written composition
-   code that does not know it is a join. Blocked on (1).
+1. **Instances: versioned per slot, or refreshed in place?** `LAW_RETIRE_NOT_MUTATE` is the
+   contract; the interpreter's unique `cache_key` index makes a recompute a `MERGE` in place.
+   A data-model decision for the interpreter, recorded in `SKETCH.md`.
+2. **Concept as term, everywhere.** `Concept.term` is optional and `depends_on` is derived
+   from it when present. Whether every product's recipe should be a term — making recipes
+   diffable and invalidation sub-term-precise — is decided by binding the first real family.
+3. **Packaging.** `a3` inside `agent_neo` ships an algebra inside a Django/Neo4j
+   distribution. The import boundary is the hedge; revisit when a second consumer appears.
+4. **Rolling a classification to `all`.** Classifications are sliced and used as keys; a
+   fold *over* a classification (day + night = all) would be a third rollable dimension with
+   its own lattice. Not needed by any law yet; deferred until a term needs it.
 
 ## Related
 

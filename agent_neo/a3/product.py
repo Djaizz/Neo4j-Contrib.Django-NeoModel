@@ -1,118 +1,324 @@
-"""Product layer: Concept / Ask / Identity / Instance / Refuse.
+"""Product layer: the vocabulary of stored analytical answers.
 
-Playground stub — no persistence.
+- :class:`Layer` and :class:`LifecycleStatus` — the two enumerations every analytical
+  product shares. Defined here, at the floor, and re-exported by the graph-bound interpreter
+  under its historical names; the dependency runs interpreter → algebra, never the reverse.
+- :class:`Concept` — a *family* plus a *revision*. The family is the stable name a product
+  is known by (it goes in the key); the revision is the recipe that computed an instance (it
+  is what gets retired). A concept also declares what each payload field *is*
+  (:class:`Field`): a leaf observation, an operator's accumulator, or a reported value.
+  That declaration is what lets the bridge refuse to re-lift a stored mean.
+- :class:`Identity` — a family at a :class:`~agent_neo.a3.carrier.Coordinate`. Its
+  ``cache_key`` is produced through a :class:`KeyScheme`, so the same identity can address
+  nodes an interpreter wrote under its own conventions, byte for byte.
+- :class:`Instance` — one computed answer at an identity, carrying what the three gates
+  need: when it was computed, by which revision, and whether lineage has flagged it.
+- :class:`Ask` — the canonical request. Policy *slots* (a staleness bound, a maturity lag)
+  whose values a domain supplies; no field that forces a recompute, because recompute is
+  derived (:data:`~agent_neo.a3.laws.LAW_REDO_DERIVED`).
+- :class:`Refuse` — the first-class result for a plan the algebra will not execute. Every
+  :class:`RefuseReason` names the operation that produces it; a reason nothing produces is
+  deleted.
 """
+
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import StrEnum
-from typing import Any, Mapping
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
+from enum import IntEnum, StrEnum
+from typing import Any, Mapping, Protocol, runtime_checkable
 
+from agent_neo.a3.carrier import Classifications, Coordinate, freeze_classifications
 
 __all__ = (
+    'PLAIN_KEY_SCHEME',
     'Ask',
     'Concept',
+    'Field',
+    'FieldRole',
     'Identity',
     'Instance',
+    'KeyScheme',
+    'Layer',
     'LifecycleStatus',
+    'LineageRef',
     'Refuse',
     'RefuseReason',
+    'TermLike',
+    'servable',
 )
 
 
+# ---------------------------------------------------------------------------
+# Shared vocabulary
+# ---------------------------------------------------------------------------
+
+
+class Layer(IntEnum):
+    """The layered stack every product sits in: ``SOURCE`` (0) … ``VIEW`` (4).
+
+    ``SOURCE`` is the source-observation leaf that grounds lineage; it is not itself a
+    computed product. A product may depend only on products at the same or a lower layer
+    (checked by :func:`agent_neo.a3.term.shape` for concepts that hold a term), and only
+    ``VIEW`` crosses the serving boundary.
+    """
+
+    SOURCE = 0
+    FACT = 1
+    METRIC = 2
+    INTERPRETATION = 3
+    VIEW = 4
+
+    @property
+    def rank(self) -> int:
+        return int(self)
+
+    @property
+    def label(self) -> str:
+        return self.name.lower()
+
+    def may_depend_on(self, other: Layer) -> bool:
+        return other.rank <= self.rank
+
+    @property
+    def is_served(self) -> bool:
+        return self is Layer.VIEW
+
+
 class LifecycleStatus(StrEnum):
+    """What is current, in place of version numbers.
+
+    ``OFFICIAL`` and ``PROVISIONAL`` are both in circulation (served, inside cascade scope);
+    ``RETIRED`` is the only "no longer current" state, kept for audit until swept. Evolving
+    anything is mint-new plus flip-prior-to-``RETIRED``; no supersession edge, no fourth state.
+    """
+
     OFFICIAL = 'official'
     PROVISIONAL = 'provisional'
     RETIRED = 'retired'
 
 
-class RefuseReason(StrEnum):
-    """Typed refusal — more valuable than a wrong number."""
+# ---------------------------------------------------------------------------
+# Refusal
+# ---------------------------------------------------------------------------
 
-    ILL_TYPED_ROLL = 'ill_typed_roll'
-    INCOMPLETE_PARTITION = 'incomplete_partition'
-    IMMATURE_WINDOW = 'immature_window'
-    STALE = 'stale'
-    NO_MERGEABLE_ACCUMULATOR = 'no_mergeable_accumulator'
-    NONLINEAR_SCALE_OVER_WINDOW = 'nonlinear_scale_over_window'
-    AUTHORITY = 'authority'
-    UNSUPPORTED_COMPOSITION = 'unsupported_composition'
+
+class RefuseReason(StrEnum):
+    """Why the algebra will not execute a plan. Each names its producer."""
+
+    ILL_TYPED_ROLL = 'ill_typed_roll'  # roll/lift: rolling values, lifting accumulators, or lifting reported values
+    NO_MERGEABLE_ACCUMULATOR = 'no_mergeable_accumulator'  # lift/roll: a holistic operator with nothing to accumulate into
+    INCOMPLETE_PARTITION = 'incomplete_partition'  # roll: a parent whose children are not all present
+    DOUBLE_COUNTED = 'double_counted'  # roll: a child that rolls into more than one parent
+    UNSUPPORTED_COMPOSITION = 'unsupported_composition'  # map/join/shift/classify/scale applied to a shape they do not accept
+    IMMATURE_WINDOW = 'immature_window'  # gate / term: the period has not settled
+    LAYER_VIOLATION = 'layer_violation'  # check_layers: a concept reads a product above its own layer
+    NOT_SERVABLE = 'not_servable'  # servable: only VIEW-layer products cross the serving boundary
 
 
 @dataclass(frozen=True, slots=True)
 class Refuse:
-    """First-class result when an op cannot lawfully proceed."""
-
     reason: RefuseReason
     detail: str = ''
     context: Mapping[str, Any] = field(default_factory=dict)
 
 
-@dataclass(frozen=True, slots=True)
-class Concept:
-    """Design-level product meaning (recipe today; term later).
-
-    Dependencies are declared strings in this sketch. A future term language
-    would derive them from free variables instead.
-    """
-
-    name: str
-    layer: str
-    depends_on: tuple[str, ...] = ()
-    lifecycle: LifecycleStatus = LifecycleStatus.OFFICIAL
+# ---------------------------------------------------------------------------
+# Identity and its key
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
-class Ask:
-    """Canonical ask. Recompute is derived from lineage + Gate; the Ask carries no override.
+class KeyScheme:
+    """How an identity's classifications serialize into its cache key.
 
-    Invalidation is only via lineage + Gate (maturity / freshness).
-    Policy *values* (staleness bound, maturity lag) are slots for domain packs.
+    ``entries`` is an *ordered* tuple of ``(name, alias, neutral)``: the classifications an
+    interpreter knows, the short code it writes for each, and the value meaning "unsliced".
+    The rule an interpreter's keys obey, and this reproduces byte for byte:
+
+    - if every scheme'd classification is neutral or absent, there is no suffix at all —
+      keys written before classifications existed are unchanged;
+    - otherwise *every* scheme'd classification is written, in scheme order, with the
+      neutral value filled in where the coordinate has none;
+    - classifications the scheme does not know follow, in name order, unaliased.
+
+    The plain scheme (no entries) writes every classification in name order.
     """
 
-    concept_name: str
-    scope_name: str
-    subject_kind: str
-    subject_key: str
-    temporal_granularity: str
-    local_period_start: str | None = None
-    local_period_end: str | None = None
-    classifications: Mapping[str, str] = field(default_factory=dict)
-    max_staleness_seconds: float | None = None
+    entries: tuple[tuple[str, str, str], ...] = ()
+
+    def suffix(self, classifications: Classifications) -> str:
+        given = dict(classifications)
+        known = {name for name, _, _ in self.entries}
+        parts: list[str] = []
+        if self.entries and any(given.get(name, neutral) != neutral for name, _, neutral in self.entries):
+            parts += [f'|{alias}={given.get(name, neutral)}' for name, alias, neutral in self.entries]
+        parts += [f'|{name}={value}' for name, value in classifications if name not in known]
+        return ''.join(parts)
+
+
+    def canonical(self, coordinate: Coordinate) -> Coordinate:
+        """The coordinate with every scheme'd classification at its neutral value removed.
+
+        Two coordinates that differ only by an explicit neutral pair name one slot and one
+        key; a carrier keyed by both would hold one answer twice. Resolvers and bridges
+        canonicalize before anything is keyed.
+        """
+        neutral = {name: value for name, _, value in self.entries}
+        kept = tuple((name, value) for name, value in coordinate.classifications if neutral.get(name) != value)
+        return replace(coordinate, classifications=kept) if kept != coordinate.classifications else coordinate
+
+
+PLAIN_KEY_SCHEME = KeyScheme()
 
 
 @dataclass(frozen=True, slots=True)
 class Identity:
-    """Fully resolved slot coordinates (de-versioned cache key analogue)."""
+    """A product family at a coordinate: the de-versioned address of one stored answer."""
 
-    concept_name: str
-    scope_name: str
-    subject_kind: str
-    subject_key: str
-    temporal_granularity: str
-    period_anchor: str
-    classifications: Mapping[str, str] = field(default_factory=dict)
+    product: str
+    coordinate: Coordinate
+
+    def cache_key(self, scheme: KeyScheme = PLAIN_KEY_SCHEME) -> str:
+        c = self.coordinate
+        return (
+            f'{self.product}|{c.scope_name}|{c.subject_kind}={c.subject_key}|'
+            f'{c.temporal_granularity}|{c.period_anchor}{scheme.suffix(c.classifications)}'
+        )
+
+
+# ---------------------------------------------------------------------------
+# Concept: family + revision + what its fields are
+# ---------------------------------------------------------------------------
+
+
+class FieldRole(StrEnum):
+    """What a payload field holds, which decides what the algebra may do with it."""
+
+    LEAF = 'leaf'  # an observation; may be lifted into any operator
+    ACCUMULATOR = 'accumulator'  # an operator's mergeable state; enters the algebra already tagged, may be rolled further
+    REPORTED = 'reported'  # an operator's lowered output; may be read, mapped, joined — never lifted
+
+
+@dataclass(frozen=True, slots=True)
+class Field:
+    role: FieldRole
+    operator: str | None = None  # registry name, for ACCUMULATOR and REPORTED
+
+    def __post_init__(self) -> None:
+        if (self.role is FieldRole.LEAF) == (self.operator is not None):
+            raise ValueError('a LEAF field names no operator; ACCUMULATOR and REPORTED fields must name theirs')
+
+
+@runtime_checkable
+class TermLike(Protocol):
+    """What a concept's recipe must expose for its dependencies to be derived rather than declared."""
+
+    def products_read(self) -> frozenset[str]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Concept:
+    """A design-level recipe: the family it computes, the revision of the recipe, and the
+    shape of what it stores. ``depends_on`` is *derived* from the recipe's term when it has
+    one — the families the term reads — never hand-declared."""
+
+    family: str
+    revision: str
+    layer: Layer
+    fields: tuple[tuple[str, Field], ...] = ()
+    term: TermLike | None = None
+    lifecycle: LifecycleStatus = LifecycleStatus.OFFICIAL
+
+    def __post_init__(self) -> None:
+        if isinstance(self.fields, Mapping):
+            object.__setattr__(self, 'fields', tuple(sorted(self.fields.items())))
 
     @property
-    def cache_key(self) -> str:
-        classif_suffix = ''.join(
-            f'|{key}={value}' for key, value in sorted(self.classifications.items())
-        )
-        return (
-            f'{self.concept_name}|{self.scope_name}|'
-            f'{self.subject_kind}={self.subject_key}|'
-            f'{self.temporal_granularity}|{self.period_anchor}'
-            f'{classif_suffix}'
-        )
+    def key(self) -> str:
+        return f'{self.family}@{self.revision}'
+
+    @property
+    def depends_on(self) -> frozenset[str]:
+        return self.term.products_read() if self.term is not None else frozenset()
+
+    def field(self, name: str) -> Field:
+        for field_name, spec in self.fields:
+            if field_name == name:
+                return spec
+        raise KeyError(f'{self.family!r} declares no field {name!r}')
+
+
+def servable(concept: Concept) -> Refuse | None:
+    """Only ``VIEW``-layer products cross the serving boundary; everything else supports them."""
+    if concept.layer.is_served:
+        return None
+    return Refuse(RefuseReason.NOT_SERVABLE,
+                  f'{concept.family!r} is a {concept.layer.label}-layer product; only views are served',
+                  {'concept': concept.family, 'layer': concept.layer})
+
+
+# ---------------------------------------------------------------------------
+# Instance and Ask
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class LineageRef:
+    """One thing an instance read, with the facts the lineage gate needs about it now.
+
+    The interpreter fetches these when it fetches the instance: the referenced node's
+    current lifecycle, whether it is itself flagged, and when it last changed. The gate then
+    decides from facts, not from a bit the interpreter decided for it.
+    """
+
+    key: str
+    lifecycle: LifecycleStatus = LifecycleStatus.OFFICIAL
+    needs_redo: bool = False
+    updated_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Instance:
-    """Computed product at an Identity — payload + gate metadata."""
+    """One computed answer at an :class:`Identity`, with what the three gates need to judge it.
+
+    ``computed_at`` may be unknown for nodes written before it was recorded; the freshness
+    gate treats unknown as stale when a bound is set. ``computed_by`` is the store's own key
+    for the recipe revision, opaque here; ``producing`` is that recipe's current lifecycle,
+    ``None`` when the store has no record of what produced the instance.
+    """
 
     identity: Identity
     payload: Mapping[str, Any]
+    computed_at: datetime | None = None
+    computed_by: str | None = None
+    producing: LifecycleStatus | None = LifecycleStatus.OFFICIAL
     lifecycle: LifecycleStatus = LifecycleStatus.OFFICIAL
     needs_redo: bool = False
-    lineage: tuple[str, ...] = ()
+    lineage: tuple[LineageRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Ask:
+    """The canonical request. Policy slots, no override.
+
+    ``subject_key=None`` asks for every subject of ``subject_kind`` in scope — "per floor" —
+    and leaves enumeration to the resolver. ``max_staleness`` and ``maturity_lag`` are slots:
+    ``None`` leaves that gate unapplied, and the interpreter — not the algebra — owns any
+    default worth having.
+    """
+
+    product: str
+    scope_name: str
+    subject_kind: str
+    subject_key: str | None
+    temporal_granularity: str
+    local_period_start: datetime | str | None = None
+    local_period_end: datetime | str | None = None
+    classifications: Classifications = ()
+    max_staleness: timedelta | None = None
+    maturity_lag: timedelta | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'classifications', freeze_classifications(self.classifications))
