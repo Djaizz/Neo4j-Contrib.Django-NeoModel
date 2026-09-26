@@ -157,6 +157,25 @@ A binding conforms when `tests/agent_neo/a3/test_reference.py` passes with its `
    leaks out of `AbstractAnalyticalComputedProduct.get()`; `_is_valid` and its helpers stay as
    thin adapters with unchanged signatures.
 
+## Open after v1 — decided when a consumer needs them, not before
+
+- **Broadcast join** with a coarser or timeless carrier (usage divided by a floor area, a rate
+  by a class): `rekey` is injective so it cannot broadcast; `scale(Mapping)` is the interim.
+- **Rolling a classification to `all`** (day + night = all) as a third rollable dimension with
+  its own lattice; no v1 law needs it.
+- **Versioned instances per slot vs in-place refresh** — the known divergence below.
+- **Every recipe as a term** (diffable recipes, sub-term-precise invalidation) vs declared
+  dependencies for adopted concepts; decided by binding the first real family.
+- **A lattice hook for stability over a span** vs the binding's lattice factory alone (v1 puts
+  it in the binding, contract item 6).
+- **Sketch bindings** (t-digest, KLL) and the tolerance form of `LAW_COMBINE_ASSOCIATIVE`.
+- **Explain** rendered from the term and provenance vs the interpreter's graph walk; the term
+  language makes it possible, nothing in v1 requires it.
+- **A pinned-recipe slot on `Ask`** (the interpreter's concept selection) — add or retire when
+  replay is bound.
+- **Whether `Coverage.complete` on an empty carrier should ever be false** for primitives other
+  than `slice` (a `restrict` that matches nothing is a legitimate plan).
+
 **Known divergence.** `LAW_RETIRE_NOT_MUTATE` says a recompute mints a successor and flips
 the prior to `RETIRED`. The interpreter's `cache_key` carries a unique index and its bulk
 upsert `MERGE`s on it, so a recompute at the same identity refreshes the node in place. The
