@@ -38,6 +38,10 @@ generic code applications build on.
 - **This is public, open-source code.** No customer, product, site or project names,
   identifiers or design-document citations, in code, comments, docstrings, tests, data or
   commit messages. Examples use neutral vocabulary (books, shelves, libraries).
+- `tests/agent_neo/test_no_domain_leaks.py` guards this tree with `agent_neo`'s: a
+  private denylist kept outside the repository (skipped, with the reason, when absent),
+  design-citation shapes, dangling `.md` and private-name pointers, and each package's
+  import boundary — the one that keeps `agent_neo` out of this package.
 - An optional dependency is imported only by the module that needs it (type-only imports
   under `TYPE_CHECKING`), so importing the package never requires it.
 

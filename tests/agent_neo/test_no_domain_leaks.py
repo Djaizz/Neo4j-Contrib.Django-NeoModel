@@ -1,9 +1,10 @@
 """Keep the public tree free of any one consumer's identity and private references.
 
-``agent_neo`` is extracted from, and shared with, applications that are not public.
-These checks keep what those applications are called — and what their private
-design documents contain — out of this repository. None of them names a consumer:
-a public list of names to avoid would itself publish those names.
+``agent_neo``, and the generic Django + NeoModel layer under it in ``django_neomodel``,
+are extracted from, and shared with, applications that are not public. These checks
+keep what those applications are called — and what their private design documents
+contain — out of this repository. None of them names a consumer: a public list of
+names to avoid would itself publish those names.
 
 1. **Private denylist.** Brand, customer, site and consumer-namespace tokens live
    outside this repository. Point ``AGENT_NEO_PRIVATE_DENYLIST`` at a file of them,
@@ -14,11 +15,14 @@ a public list of names to avoid would itself publish those names.
    shapes (``ABC-1234``) and design-element citations (``(E<n>/E<m>)``) are how a
    private design corpus gets cited.
 3. **Dangling pointers.** Every ``*.md`` path a shipped file cites must exist here,
-   and every ``_private`` name it cites in backticks must be defined in
-   ``agent_neo`` — a pointer into someone else's repository is a leak no keyword
-   list catches.
-4. **Import boundary.** ``agent_neo`` imports only the standard library, its
-   declared third-party dependencies, and itself.
+   and every ``_private`` name it cites in backticks must be defined in a shipped
+   package — a pointer into someone else's repository is a leak no keyword list
+   catches.
+4. **Import boundary.** Each shipped package imports only the standard library and
+   its declared dependencies. ``django_neomodel`` sits below ``agent_neo`` and never
+   imports it.
+
+The shipped packages are ``agent_neo`` and ``django_neomodel``.
 """
 
 
@@ -40,6 +44,7 @@ _TEXT_SUFFIXES = frozenset({
     '.py', '.md', '.cypher', '.yml', '.yaml', '.toml', '.txt', '.rst', '.cfg', '.ini', '.json',
 })
 _SHIPPED_SUFFIXES = frozenset({'.py', '.md', '.cypher'})
+_SHIPPED_PACKAGES = frozenset({'agent_neo', 'django_neomodel'})
 
 _PRIVATE_DENYLIST_ENV = 'AGENT_NEO_PRIVATE_DENYLIST'
 _PRIVATE_DENYLIST_DEFAULT = Path.home() / '.config' / 'agent_neo' / 'private-denylist.txt'
@@ -58,19 +63,30 @@ _EXTERNAL_PRIVATE_NAMES = frozenset({
     '_install_relationship',
 })
 
-#: Third-party top-level packages ``agent_neo`` may import. Adding one is a
-#: dependency decision, which is exactly why it has to be made here, on purpose.
-_ALLOWED_THIRD_PARTY = frozenset({
-    'agent_neo',
-    'colorama',
-    'django',
-    'django_neomodel',
-    'drf_spectacular',
-    'neo4j',
-    'neomodel',
-    'rest_framework',
-    'tqdm',
-})
+#: Top-level packages, beyond the standard library, each shipped package may import.
+#: Adding one is a dependency decision, which is exactly why it has to be made here,
+#: on purpose. ``django_neomodel`` is the lower layer: ``agent_neo`` is not on its list.
+_ALLOWED_THIRD_PARTY: dict[str, frozenset[str]] = {
+    'agent_neo': frozenset({
+        'agent_neo',
+        'colorama',
+        'django',
+        'django_neomodel',
+        'drf_spectacular',
+        'neo4j',
+        'neomodel',
+        'rest_framework',
+        'tqdm',
+    }),
+    'django_neomodel': frozenset({
+        'django',
+        'django_neomodel',
+        'drf_spectacular',
+        'neo4j',
+        'neomodel',
+        'rest_framework',
+    }),
+}
 
 
 @cache
@@ -99,10 +115,10 @@ def _tracked_text_files() -> tuple[Path, ...]:
     return files
 
 
-def _shipped_files() -> tuple[Path, ...]:
+def _shipped_files(packages: frozenset[str] = _SHIPPED_PACKAGES) -> tuple[Path, ...]:
     return tuple(
         path for path in _tracked_text_files()
-        if path.suffix in _SHIPPED_SUFFIXES and path.relative_to(REPO_ROOT).parts[0] == 'agent_neo'
+        if path.suffix in _SHIPPED_SUFFIXES and path.relative_to(REPO_ROOT).parts[0] in packages
     )
 
 
@@ -154,7 +170,7 @@ def test_no_design_corpus_citation_shapes_in_shipped_files() -> None:
     assert not hits, 'citations of an external design corpus:\n' + '\n'.join(hits)
 
 
-def _names_defined_in_agent_neo() -> set[str]:
+def _names_defined_in_shipped_packages() -> set[str]:
     names: set[str] = set()
     for path in _shipped_files():
         if path.suffix != '.py':
@@ -168,7 +184,7 @@ def _names_defined_in_agent_neo() -> set[str]:
 
 
 def test_cited_private_names_are_defined_here() -> None:
-    defined = _names_defined_in_agent_neo() | _EXTERNAL_PRIVATE_NAMES
+    defined = _names_defined_in_shipped_packages() | _EXTERNAL_PRIVATE_NAMES
     dangling = []
     for path in _shipped_files():
         for line_number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
@@ -176,7 +192,7 @@ def test_cited_private_names_are_defined_here() -> None:
                 name = match.group(1) or match.group(2)
                 if name not in defined and not name.startswith('__'):
                     dangling.append(f'{_relative(path)}:{line_number}: {name}')
-    assert not dangling, 'cited names that are not defined in agent_neo:\n' + '\n'.join(dangling)
+    assert not dangling, 'cited names that are not defined in a shipped package:\n' + '\n'.join(dangling)
 
 
 def test_cited_markdown_paths_exist_here() -> None:
@@ -197,9 +213,12 @@ def test_cited_markdown_paths_exist_here() -> None:
     assert not dangling, 'cited documents that do not exist in this repository:\n' + '\n'.join(dangling)
 
 
-def test_agent_neo_imports_only_declared_packages() -> None:
+@pytest.mark.parametrize('package', sorted(_ALLOWED_THIRD_PARTY))
+def test_shipped_package_imports_only_declared_packages(package: str) -> None:
+    assert _shipped_files(frozenset({package})), f'no shipped files found for {package}'
+    allowed = _ALLOWED_THIRD_PARTY[package]
     violations = []
-    for path in _shipped_files():
+    for path in _shipped_files(frozenset({package})):
         if path.suffix != '.py':
             continue
         for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
@@ -211,6 +230,6 @@ def test_agent_neo_imports_only_declared_packages() -> None:
                 continue
             for module in modules:
                 top_level = module.split('.')[0]
-                if top_level not in sys.stdlib_module_names and top_level not in _ALLOWED_THIRD_PARTY:
+                if top_level not in sys.stdlib_module_names and top_level not in allowed:
                     violations.append(f'{_relative(path)}:{node.lineno}: {module}')
-    assert not violations, 'imports outside the declared dependency set:\n' + '\n'.join(violations)
+    assert not violations, f'{package} imports outside its declared dependency set:\n' + '\n'.join(violations)
