@@ -177,8 +177,8 @@ A binding conforms when `tests/agent_neo/a3/test_reference.py` passes with its `
 
 - **Ask-aware coordinate functions.** `Env.functions` entries for `Rekey`/`Map`/`Restrict`/
   `Classify` cannot see `Env.ask`; a broadcast of a site-level series onto the served subject
-  needs either that (a function marked as taking the ask first) or a broadcast join. Found by the
-  R-COP exercise (kWh per cooling-degree-hour per plant).
+  needs either that (a function marked as taking the ask first) or a broadcast join. Found by
+  writing a recipe that divides a per-subject series by a site-level one.
 - **Chained refusals.** `ensure` drops leaf refusals when it builds the parent's carrier; carrying
   them in the parent refusal's context would make one ask sufficient to see the root cause.
 
