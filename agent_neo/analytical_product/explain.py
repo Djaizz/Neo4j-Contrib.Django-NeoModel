@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from typing import Any, LiteralString, Sequence
 
+from django_neomodel.util.json_safe import json_safe_structure
 from neomodel.sync_.database import db
 
 from agent_neo.analytical_product.enum import GraphEdgeKind
-from agent_neo.util.json_safe import json_safe_structure
 
 
 __all__: tuple[LiteralString, ...] = (

@@ -8,20 +8,20 @@ from typing import Any, LiteralString
 import json
 
 
-__all__: tuple[LiteralString, ...] = ('coerce_metrics_mapping', 'json_safe_structure')
+__all__: tuple[LiteralString, ...] = ('coerce_json_mapping', 'json_safe_structure')
 
 
-def coerce_metrics_mapping(metrics: Any) -> dict[str, Any]:
-    """Normalize a ``metrics`` mapping read from NeoModel or raw Cypher (sometimes a JSON string)."""
-    if metrics is None:
+def coerce_json_mapping(value: Any) -> dict[str, Any]:
+    """Normalize a JSON mapping read back from NeoModel (a dict) or raw Cypher (sometimes its JSON string)."""
+    if value is None:
         return {}
-    if isinstance(metrics, dict):
-        return metrics
-    if isinstance(metrics, str):
-        if not metrics.strip():
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        if not value.strip():
             return {}
         try:
-            parsed = json.loads(metrics)
+            parsed = json.loads(value)
         except json.JSONDecodeError:
             return {}
         return parsed if isinstance(parsed, dict) else {}

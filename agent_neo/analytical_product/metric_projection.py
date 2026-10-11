@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, LiteralString
 
+from django_neomodel.util.json_safe import json_safe_structure
+
 from agent_neo.analytical_product.abstract import (
     AbstractAnalyticalComputedProduct,
     AbstractAnalyticalConcept,
@@ -25,7 +27,6 @@ from agent_neo.analytical_product.abstract import (
 from agent_neo.analytical_product.enum import NodeLifecycleStatus
 from agent_neo.analytical_product.request import AnalyticalProductRequest
 from agent_neo.analytical_product.scope import AnalyticalProductScope
-from agent_neo.util.json_safe import json_safe_structure
 
 
 __all__: tuple[LiteralString, ...] = (

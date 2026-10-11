@@ -7,6 +7,7 @@ context: [../AGENTS.md](../AGENTS.md) — what counts as generic, and the open-s
 
 | Module | Holds | Needs |
 | --- | --- | --- |
+| `json_safe.py` | `json_safe_structure` — a value made storable by a neomodel `JSONProperty`: datetimes and dates as ISO strings, sets as sorted lists, keys as strings, recursively; `coerce_json_mapping` — the mapping such a property reads back as, whether neomodel hands a dict or raw Cypher its JSON string | — |
 | `neo4j_datetime.py` | `coerce_to_fixed_offset_for_neo4j` — a `zoneinfo` / `pytz` datetime the Neo4j driver can serialize without crashing CPython's zoneinfo extension, its zone name kept; `apply_neo4j_datetime_coercion_patch` — routes `DateTimeNeo4jFormatProperty.deflate` through it: idempotent, never applied on import, so call it once at startup | — |
 | `openapi.py` | `DjangoNeoModelAutoSchema` — a drf-spectacular `AutoSchema` that gives every `DjangoField` a string schema | drf-spectacular |
 | `admin/prefetch.py` | Batch Cypher prefetch for admin changelists and DRF viewsets, one query per page instead of N+1: `run_prefetch`; the row readers `safe_list_from_row` / `safe_scalar_from_row`; the `format_prefetched_*` list-display helpers, whose `strict=True` tells a prefetch that never ran (`PrefetchNotRunError`) from an absent value; `set_prefetch_attrs_from_entry`; `attach_prefetch_cache_to_filtered_queryset`; and `CypherQueryAndReturnHeaders`, the query shape they read (the text, its RETURN headers, a column lookup) | pandas, through neomodel's pandas integration |
