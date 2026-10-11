@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
-from agent_neo.graph_db._core import (
+from django_neomodel.graph_db._core import (
     _chunk_rows_by_item_budget,
     _split_row_by_item_budget,
     batched_cypher_execute,
@@ -115,7 +115,7 @@ def test_a_crowd_of_empty_rows_is_still_bounded_by_the_row_budget() -> None:
 
 def test_returns_accumulated_result_rows_across_chunks() -> None:
     """The graph's own account of the write, which the caller needs to verify it."""
-    with patch('agent_neo.graph_db._core.db') as mock_db:
+    with patch('django_neomodel.graph_db._core.db') as mock_db:
         mock_db.cypher_query.return_value = ([[7]], None)
         results = batched_cypher_execute(
             _rows(4, 4, 4), 'UNWIND $rows AS row RETURN 1 AS deleted',
@@ -126,7 +126,7 @@ def test_returns_accumulated_result_rows_across_chunks() -> None:
 
 
 def test_returns_empty_list_for_no_rows_without_touching_the_database() -> None:
-    with patch('agent_neo.graph_db._core.db') as mock_db:
+    with patch('django_neomodel.graph_db._core.db') as mock_db:
         assert batched_cypher_execute(
             [], 'UNWIND $rows AS row RETURN 1', count_key='targets',
         ) == []
@@ -134,7 +134,7 @@ def test_returns_empty_list_for_no_rows_without_touching_the_database() -> None:
 
 
 def test_a_write_with_no_return_contributes_no_results() -> None:
-    with patch('agent_neo.graph_db._core.db') as mock_db:
+    with patch('django_neomodel.graph_db._core.db') as mock_db:
         mock_db.cypher_query.return_value = ([], None)
         assert batched_cypher_execute(
             _rows(2), 'UNWIND $rows AS row MERGE (:X {id: row.source})',
@@ -150,8 +150,8 @@ def test_retry_tuning_reaches_the_retry_loop() -> None:
     unless the tuning is passed through here.
     """
     with (
-        patch('agent_neo.graph_db._core.db') as mock_db,
-        patch('agent_neo.graph_db._core.retry_neo4j_cluster_operation') as mock_retry,
+        patch('django_neomodel.graph_db._core.db') as mock_db,
+        patch('django_neomodel.graph_db._core.retry_neo4j_cluster_operation') as mock_retry,
     ):
         mock_db.cypher_query.return_value = ([], None)
         mock_retry.return_value = ([], None)
@@ -166,8 +166,8 @@ def test_retry_tuning_reaches_the_retry_loop() -> None:
 
 def test_omitted_retry_tuning_forwards_nothing() -> None:
     with (
-        patch('agent_neo.graph_db._core.db') as mock_db,
-        patch('agent_neo.graph_db._core.retry_neo4j_cluster_operation') as mock_retry,
+        patch('django_neomodel.graph_db._core.db') as mock_db,
+        patch('django_neomodel.graph_db._core.retry_neo4j_cluster_operation') as mock_retry,
     ):
         mock_db.cypher_query.return_value = ([], None)
         mock_retry.return_value = ([], None)
@@ -184,7 +184,7 @@ def test_every_row_reaches_a_statement_exactly_once() -> None:
         submitted.extend(row['source'] for row in params['rows'])
         return ([], None)
 
-    with patch('agent_neo.graph_db._core.db') as mock_db:
+    with patch('django_neomodel.graph_db._core.db') as mock_db:
         mock_db.cypher_query.side_effect = _capture
         batched_cypher_execute(
             _rows(4, 0, 4, 0, 4), 'UNWIND $rows AS row RETURN 1',

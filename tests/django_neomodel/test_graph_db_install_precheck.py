@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
-import agent_neo.graph_db._core as graph_core
+import django_neomodel.graph_db._core as graph_core
 
 
 # ============================================================================

@@ -1,7 +1,7 @@
 """Tests that retry tuning is resolved at call time, not at ``def`` time.
 
 This is a correctness contract, not a performance one. Reassigning the
-``NEO4J_CLUSTER_LEADER_SWITCH_*`` globals on ``agent_neo.graph_db._core`` at runtime
+``NEO4J_CLUSTER_LEADER_SWITCH_*`` globals on ``django_neomodel.graph_db._core`` at runtime
 must reach the retry loop. While those values were bound
 as parameter defaults, that assignment reached ``connect_db``'s log message and
 nothing else: the retry loop kept using whatever the globals held at import. The
@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from agent_neo.graph_db._core import retry_neo4j_cluster_operation
-import agent_neo.graph_db._core as graph_core
+from django_neomodel.graph_db._core import retry_neo4j_cluster_operation
+import django_neomodel.graph_db._core as graph_core
 
 
 class _CountingTransientOperation:

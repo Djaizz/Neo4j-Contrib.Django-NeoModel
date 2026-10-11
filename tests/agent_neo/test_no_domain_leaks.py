@@ -85,6 +85,7 @@ _ALLOWED_THIRD_PARTY: dict[str, frozenset[str]] = {
         'neo4j',
         'neomodel',
         'rest_framework',
+        'tqdm',
     }),
 }
 

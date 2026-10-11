@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any, LiteralString
+import logging
 
 
 __all__: tuple[LiteralString, ...] = (
@@ -13,7 +14,11 @@ __all__: tuple[LiteralString, ...] = (
     'cypher_read',
     'cypher_write',
     'for_each_chunk',
+    'safe_connect_relationship',
 )
+
+
+log = logging.getLogger(__name__)
 
 
 DEFAULT_DELETE_CHUNK_SIZE = 500
@@ -28,7 +33,7 @@ def cypher_read(
 ) -> tuple[list[list[Any]], list[str]]:
     from neomodel.sync_.database import db
 
-    from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
+    from django_neomodel.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 
     return retry_neo4j_cluster_operation(
         lambda: db.cypher_query(query, params),
@@ -40,7 +45,7 @@ def cypher_read(
 def cypher_write(query: str, params: dict[str, Any], *, description: str = 'cypher write') -> None:
     from neomodel.sync_.database import db
 
-    from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
+    from django_neomodel.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 
     retry_neo4j_cluster_operation(
         lambda: db.cypher_query(query, params),
@@ -64,3 +69,35 @@ def for_each_chunk(
         action(chunk)
         processed += len(chunk)
     return processed
+
+
+def safe_connect_relationship(
+    connect_callable: Any,
+    *,
+    description: str,
+    reraise_cardinality: bool = True,
+) -> None:
+    """Run a NeoModel ``.connect()`` with cluster leader retries on transient errors."""
+    from django_neomodel.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
+
+    try:
+        retry_neo4j_cluster_operation(
+            connect_callable,
+            description=description,
+            reconnect=reconnect_neo4j_driver,
+        )
+    except Exception as exc:
+        if reraise_cardinality:
+            try:
+                from neomodel.exceptions import CardinalityViolation  # noqa: PLC0415
+
+                if isinstance(exc, CardinalityViolation):
+                    raise
+            except ImportError:
+                pass
+        log.warning(
+            '%s: relationship connect failed (%s): %s',
+            description,
+            type(exc).__name__,
+            exc,
+        )

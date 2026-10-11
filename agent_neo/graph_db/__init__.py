@@ -1,4 +1,9 @@
-"""Graph database helpers."""
+"""Graph database operations for analytical period rollups: packaged templates and bulk helpers.
+
+The generic graph-DB layer these build on — connection config and lifecycle, query
+loading, retried and batched Cypher execution, template binding — is
+``django_neomodel.graph_db``.
+"""
 
 
 from __future__ import annotations
@@ -6,9 +11,7 @@ from __future__ import annotations
 from typing import LiteralString
 
 from agent_neo.graph_db.cypher_templates import (
-    COUNT_NODES_BY_PROPERTY_IN_KEYS,
     COUNT_ROLLUPS_IN_WINDOW,
-    DELETE_NODES_BY_PROPERTY_IN_KEYS,
     DELETE_ROLLUPS_IN_WINDOW,
     FETCH_CACHE_KEYS_BY_SPINE_WINDOW,
     FETCH_ROWS_BY_CACHE_KEYS,
@@ -16,98 +19,32 @@ from agent_neo.graph_db.cypher_templates import (
     MERGE_ROWS_BY_CACHE_KEY_ON_MATCH,
     PRELOAD_PERIOD_ROLLUPS_BY_SPINE_WINDOW,
 )
-from agent_neo.graph_db.execute import (
-    DEFAULT_DELETE_CHUNK_SIZE,
-    DEFAULT_IN_CHUNK_SIZE,
-    cypher_read,
-    cypher_write,
-    for_each_chunk,
-)
-from agent_neo.graph_db._core import (
-    GRAPH_DB_BATCH_SIZE,
-    NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER,
-    NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS,
-    NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS,
-    NEO4J_CLUSTER_LEADER_SWITCH_RETRY_DELAY_SECONDS,
-    GraphDbConfig,
-    GraphDbQueryAndReturnHeaderList,
-    batched_cypher_execute,
-    connect_graph_db,
-    is_graph_db_connected,
-    is_transient_neo4j_error,
-    load_query,
-    reconnect_graph_db_if_needed,
-    reconnect_neo4j_driver,
-    retry_neo4j_cluster_operation,
-    set_label_install_callback,
-)
 from agent_neo.graph_db.period_rollup_bulk import (
     fetch_cache_keys_by_indexed_filters_cypher,
     fetch_period_rollup_cache_keys_by_spine_window_cypher,
     fetch_period_rollup_rows_by_cache_keys_cypher,
     rows_by_cache_key_from_cypher_rows,
     merge_period_rollup_rows_cypher,
-    neo4j_bulk_timestamps,
     preload_period_rollups_by_spine_window_cypher,
     property_maps_from_cypher_rows,
-    safe_connect_relationship,
     spine_window_where_clauses,
-)
-from agent_neo.graph_db.query_bind import (
-    LABEL_PLACEHOLDER,
-    PROPERTY_PLACEHOLDER,
-    WHERE_PLACEHOLDER,
-    bind_label,
-    bind_label_and_property,
-    bind_where_clause,
 )
 
 
 __all__: tuple[LiteralString, ...] = (
-    "COUNT_NODES_BY_PROPERTY_IN_KEYS",
     "COUNT_ROLLUPS_IN_WINDOW",
-    "DEFAULT_DELETE_CHUNK_SIZE",
-    "DEFAULT_IN_CHUNK_SIZE",
-    "DELETE_NODES_BY_PROPERTY_IN_KEYS",
     "DELETE_ROLLUPS_IN_WINDOW",
     "FETCH_CACHE_KEYS_BY_SPINE_WINDOW",
     "FETCH_ROWS_BY_CACHE_KEYS",
-    "GRAPH_DB_BATCH_SIZE",
-    "LABEL_PLACEHOLDER",
     "MERGE_ROWS_BY_CACHE_KEY",
     "MERGE_ROWS_BY_CACHE_KEY_ON_MATCH",
     "PRELOAD_PERIOD_ROLLUPS_BY_SPINE_WINDOW",
-    "PROPERTY_PLACEHOLDER",
-    "WHERE_PLACEHOLDER",
-    "NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER",
-    "NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS",
-    "NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS",
-    "NEO4J_CLUSTER_LEADER_SWITCH_RETRY_DELAY_SECONDS",
-    "GraphDbConfig",
-    "GraphDbQueryAndReturnHeaderList",
-    "batched_cypher_execute",
-    "bind_label",
-    "bind_label_and_property",
-    "bind_where_clause",
-    "connect_graph_db",
-    "cypher_read",
-    "cypher_write",
     "fetch_cache_keys_by_indexed_filters_cypher",
     "fetch_period_rollup_cache_keys_by_spine_window_cypher",
     "fetch_period_rollup_rows_by_cache_keys_cypher",
-    "for_each_chunk",
     "rows_by_cache_key_from_cypher_rows",
-    "is_graph_db_connected",
-    "is_transient_neo4j_error",
-    "load_query",
     "merge_period_rollup_rows_cypher",
-    "neo4j_bulk_timestamps",
     "preload_period_rollups_by_spine_window_cypher",
     "property_maps_from_cypher_rows",
-    "reconnect_graph_db_if_needed",
-    "reconnect_neo4j_driver",
-    "retry_neo4j_cluster_operation",
-    "safe_connect_relationship",
-    "set_label_install_callback",
     "spine_window_where_clauses",
 )

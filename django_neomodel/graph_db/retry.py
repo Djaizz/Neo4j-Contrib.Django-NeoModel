@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import LiteralString
 
-from agent_neo.graph_db._core import (
+from django_neomodel.graph_db._core import (
     NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER,
     NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS,
     NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS,

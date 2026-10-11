@@ -2,17 +2,17 @@
 
 `agent_neo` ships alongside `django_neomodel` in the same distribution. It provides reusable patterns for agent-oriented graph applications:
 
-- **Graph DB helpers** — connection config, query loading, batch execution, cluster retry
 - **Analytical product engine** — ensure-on-read for layered computed nodes with design lifecycle
+- **Period-rollup graph operations** (`agent_neo.graph_db`) — packaged templates and bulk helpers for period rollup nodes
 
-It builds on the generic Django + NeoModel layer below it: `django_neomodel.models` (the timestamped node base, automatic `created` / `updated` audit fields) and `django_neomodel.util` (Neo4j-safe datetimes, batch-Cypher admin prefetch and search, OpenAPI schemas, fresh per-request querysets).
+It builds on the generic Django + NeoModel layer below it: `django_neomodel.models` (the timestamped node base, automatic `created` / `updated` audit fields), `django_neomodel.graph_db` (connection config, query loading, batch execution, cluster retry) and `django_neomodel.util` (Neo4j-safe datetimes, batch-Cypher admin prefetch and search, OpenAPI schemas, JSON-safe values).
 
 ## Layering
 
 | Package | Role |
 |---------|------|
-| `django_neomodel` | Django ↔ NeoModel bridge, generic node bases (`django_neomodel.models`) and utilities (`django_neomodel.util`) |
-| `agent_neo` | Agent graph patterns (graph helpers, analytical product engine, the `a3` algebra) |
+| `django_neomodel` | Django ↔ NeoModel bridge, generic node bases (`django_neomodel.models`), graph-DB operations (`django_neomodel.graph_db`) and utilities (`django_neomodel.util`) |
+| `agent_neo` | Agent graph patterns (analytical product engine, period-rollup graph operations, the `a3` algebra) |
 | Your domain app | Concrete node classes, business products, label registration |
 
 ## Quick start
@@ -31,7 +31,7 @@ class EntityType(DjangoNeoModelWithCreatedAndUpdatedProps):
 ```
 
 ```python
-from agent_neo.graph_db import GraphDbConfig, set_label_install_callback
+from django_neomodel.graph_db import GraphDbConfig, set_label_install_callback
 from neomodel.sync_.database import db
 
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_neo.graph_db._core import _parse_return_headers, _strip_cypher_comments
+from django_neomodel.graph_db._core import _parse_return_headers, _strip_cypher_comments
 
 
 def test_a_plain_return_yields_its_aliases() -> None:

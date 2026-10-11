@@ -13,15 +13,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
 from typing import TYPE_CHECKING, Any, LiteralString, TypeVar
 
-from neomodel.properties import Property
-from neomodel.sync_.database import db
-
-from agent_neo.graph_db import (
+from django_neomodel.graph_db import (
     GRAPH_DB_BATCH_SIZE,
     batched_cypher_execute,
     reconnect_neo4j_driver,
     retry_neo4j_cluster_operation,
 )
+from neomodel.properties import Property
+from neomodel.sync_.database import db
+
 from agent_neo.util.datetime import coerce_to_utc_for_neo4j_datetime
 
 from .enum import (

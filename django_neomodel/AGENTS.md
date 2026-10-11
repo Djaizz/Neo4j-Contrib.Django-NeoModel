@@ -11,7 +11,7 @@ Django needs each one.
 The bridge between Django and neomodel. `DjangoNode` makes a neomodel `StructuredNode`
 look enough like a Django model for the admin, forms, Django REST framework and
 drf-spectacular; `DjangoNeoModelAdmin` runs the admin over `NodeSet`s; `NeomodelConfig`
-feeds neomodel its settings from Django's. Beside the bridge, two subpackages hold the
+feeds neomodel its settings from Django's. Beside the bridge, three subpackages hold the
 generic code applications build on.
 
 | Path | What lives there |
@@ -21,6 +21,7 @@ generic code applications build on.
 | `apps.py` | `NeomodelConfig` |
 | `management/commands/` | `install_labels`, `clear_neo4j` |
 | `models/` | Abstract node bases — see [models/AGENTS.md](models/AGENTS.md) |
+| `graph_db/` | Graph-database operations: connection config and lifecycle, Cypher loading, retried and batched execution, template binding — see [graph_db/AGENTS.md](graph_db/AGENTS.md) |
 | `util/` | Generic utilities, one concern per module — see [util/AGENTS.md](util/AGENTS.md) |
 
 `agent_neo`, shipped in the same distribution, builds on this package.
@@ -31,8 +32,9 @@ generic code applications build on.
   optional integrations (Django REST framework, drf-spectacular): no application concept,
   no domain vocabulary. Code that knows an application's concepts stays in that
   application.
-- **A node base class goes in `models/`; anything else goes in `util/`**, in a module
-  named for its one concern.
+- **A node base class goes in `models/`; an operation on the graph database
+  (connecting, loading or executing Cypher) in `graph_db/`; anything else in `util/`**, in
+  a module named for its one concern.
 - **This package imports nothing from `agent_neo` or from any application.** The layering
   runs one way: applications → `agent_neo` → `django_neomodel` → neomodel.
 - **This is public, open-source code.** No customer, product, site or project names,
@@ -47,8 +49,8 @@ generic code applications build on.
 
 ## Tests
 
-- `tests/django_neomodel/` — unit tests of the generic layer (`models/`, `util/`); no
-  Neo4j server needed.
+- `tests/django_neomodel/` — unit tests of the generic layer (`models/`, `graph_db/`,
+  `util/`); no Neo4j server needed.
 - `tests/someapp/` — the integration tests, against a live Neo4j: CI starts one with
   `scripts/docker-neo4j.sh`, then runs `tests/manage.py install_labels` and `migrate`
   before `pytest`.

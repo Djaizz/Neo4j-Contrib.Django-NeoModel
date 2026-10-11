@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any, LiteralString
 import contextvars
 import logging
 
+from django_neomodel.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from neomodel.sync_.database import db
 
 from agent_neo.analytical_product.registry import iter_registered_analytical_product_classes
-from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from agent_neo.graph_db.cypher_templates import SCOPE_NAME_DB_PROPERTY
 from agent_neo.util.datetime import TemporalGranularity, epoch_seconds
 

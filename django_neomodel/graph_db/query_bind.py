@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import LiteralString
 
-from agent_neo.graph_db._core import GraphDbQueryAndReturnHeaderList
+from django_neomodel.graph_db._core import GraphDbQueryAndReturnHeaderList
 
 
 __all__: tuple[LiteralString, ...] = (

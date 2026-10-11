@@ -20,8 +20,6 @@ from neomodel.config import get_config
 from neomodel.sync_.database import db
 from tqdm import tqdm
 
-from agent_neo.util.env import resolve_env_placeholder
-
 
 __all__: tuple[LiteralString, ...] = (
     'GRAPH_DB_BATCH_SIZE',
@@ -442,7 +440,7 @@ def retry_neo4j_cluster_operation(
     ``NEO4J_CLUSTER_LEADER_SWITCH_*`` module globals **inside the body**, at call
     time. This is a correctness requirement, not a performance one: binding them as
     parameter defaults reads the globals once, at ``def`` time, so reassigning
-    ``agent_neo.graph_db._core.NEO4J_CLUSTER_LEADER_SWITCH_*`` at runtime changed
+    ``django_neomodel.graph_db._core.NEO4J_CLUSTER_LEADER_SWITCH_*`` at runtime changed
     nothing the retry loop read, while ``connect_db`` printed the assigned values.
     The log claimed a tuning that was not in effect.
 
@@ -511,48 +509,35 @@ def retry_neo4j_cluster_operation(
 
 @dataclass
 class GraphDbConfig:
-    """Graph database connection configuration."""
+    """Graph database connection configuration, as literal values.
+
+    A caller whose configuration names its values indirectly (environment
+    variables, a secrets store) resolves them before constructing this.
+    """
     uri: str
     username: str
     password: str
     database: str
 
-    @staticmethod
-    def _resolve_env_placeholder(value: str) -> str:
-        return resolve_env_placeholder(value)
-
-    def get_resolved_uri(self) -> str:
-        return self._resolve_env_placeholder(self.uri)
-
-    def get_resolved_username(self) -> str:
-        return self._resolve_env_placeholder(self.username)
-
-    def get_resolved_password(self) -> str:
-        return self._resolve_env_placeholder(self.password)
-
-    def get_resolved_database(self) -> str:
-        return self._resolve_env_placeholder(self.database)
+    def _refuse_empty_connection_values(self) -> None:
+        """Raise when the URI, the username or the database is empty; the password may be."""
+        for field_name in ('uri', 'username', 'database'):
+            if not getattr(self, field_name):
+                raise RuntimeError(
+                    f'GraphDbConfig.{field_name} is empty: pass its value, resolved by the '
+                    'caller from wherever the configuration keeps it.'
+                )
 
     def build_neomodel_database_url(self) -> str:
         """Bolt URL for django-neomodel / neomodel.config (matches ``connect_db``)."""
-        uri = self.get_resolved_uri()
-        username = self.get_resolved_username()
-        password = self.get_resolved_password()
-        database = self.get_resolved_database()
-        if not uri:
-            raise RuntimeError(f"URI not resolved - check environment variable: {self.uri}")
-        if not username:
-            raise RuntimeError(f"Username not resolved - check environment variable: {self.username}")
-        if not database:
-            raise RuntimeError(f"Database not resolved - check environment variable: {self.database}")
-
-        parsed_uri = urlparse(uri)
+        self._refuse_empty_connection_values()
+        parsed_uri = urlparse(self.uri)
         protocol = parsed_uri.scheme
         host = parsed_uri.hostname or 'localhost'
         port = parsed_uri.port or 7687
-        encoded_username = quote(username, safe="")
-        encoded_password = quote(password, safe="")
-        return f"{protocol}://{encoded_username}:{encoded_password}@{host}:{port}/{database}"
+        encoded_username = quote(self.username, safe="")
+        encoded_password = quote(self.password, safe="")
+        return f"{protocol}://{encoded_username}:{encoded_password}@{host}:{port}/{self.database}"
 
     def connect_db(self, *, install_labels_and_indexes: bool = False) -> None:
         """Open Bolt and optionally install NeoModel labels/indexes via registered callback.
@@ -567,16 +552,6 @@ class GraphDbConfig:
         when the cluster is electing a leader or otherwise transiently unavailable.
         """
         global _active_database_url, _labels_installed_for_url
-
-        uri = self.get_resolved_uri()
-        username = self.get_resolved_username()
-        database = self.get_resolved_database()
-        if not uri:
-            raise RuntimeError(f"URI not resolved - check environment variable: {self.uri}")
-        if not username:
-            raise RuntimeError(f"Username not resolved - check environment variable: {self.username}")
-        if not database:
-            raise RuntimeError(f"Database not resolved - check environment variable: {self.database}")
 
         database_url = self.build_neomodel_database_url()
 

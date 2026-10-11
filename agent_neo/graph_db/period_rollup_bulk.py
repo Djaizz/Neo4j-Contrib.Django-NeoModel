@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, LiteralString
 import json
-import logging
+
+from django_neomodel.graph_db.execute import DEFAULT_IN_CHUNK_SIZE, cypher_read, cypher_write, for_each_chunk
+from django_neomodel.graph_db.query_bind import bind_label, bind_where_clause
 
 from agent_neo.graph_db.cypher_templates import (
     SCOPE_NAME_DB_PROPERTY,
@@ -17,8 +18,6 @@ from agent_neo.graph_db.cypher_templates import (
     MERGE_ROWS_BY_CACHE_KEY_ON_MATCH,
     PRELOAD_PERIOD_ROLLUPS_BY_SPINE_WINDOW,
 )
-from agent_neo.graph_db.execute import DEFAULT_IN_CHUNK_SIZE, cypher_read, cypher_write, for_each_chunk
-from agent_neo.graph_db.query_bind import bind_label, bind_where_clause
 
 
 __all__: tuple[LiteralString, ...] = (
@@ -26,22 +25,12 @@ __all__: tuple[LiteralString, ...] = (
     'fetch_period_rollup_cache_keys_by_spine_window_cypher',
     'fetch_period_rollup_rows_by_cache_keys_cypher',
     'merge_period_rollup_rows_cypher',
-    'neo4j_bulk_timestamps',
     'preload_period_rollups_by_spine_window_cypher',
     'property_maps_from_cypher_rows',
     'rows_by_cache_key_from_cypher_rows',
-    'safe_connect_relationship',
     'spine_window_where_clauses',
 )
 
-
-log = logging.getLogger(__name__)
-
-
-def neo4j_bulk_timestamps() -> dict[str, datetime]:
-    """UTC datetimes for Cypher-created nodes (matches DjangoNeoModel save semantics)."""
-    now = datetime.now(UTC)
-    return {'created': now, 'updated': now}
 
 
 def _normalize_period_rollup_datetime_for_merge(value: Any) -> Any:
@@ -70,38 +59,6 @@ def _normalize_period_rollup_row_for_merge(row: dict[str, Any]) -> dict[str, Any
             else:
                 normalized_row[key] = json.dumps(value, sort_keys=True)
     return normalized_row
-
-
-def safe_connect_relationship(
-    connect_callable: Any,
-    *,
-    description: str,
-    reraise_cardinality: bool = True,
-) -> None:
-    """Run a NeoModel ``.connect()`` with cluster leader retries on transient errors."""
-    from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
-
-    try:
-        retry_neo4j_cluster_operation(
-            connect_callable,
-            description=description,
-            reconnect=reconnect_neo4j_driver,
-        )
-    except Exception as exc:
-        if reraise_cardinality:
-            try:
-                from neomodel.exceptions import CardinalityViolation  # noqa: PLC0415
-
-                if isinstance(exc, CardinalityViolation):
-                    raise
-            except ImportError:
-                pass
-        log.warning(
-            '%s: relationship connect failed (%s): %s',
-            description,
-            type(exc).__name__,
-            exc,
-        )
 
 
 def spine_window_where_clauses(

@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_neo.graph_db._core import (
+from django_neomodel.graph_db._core import (
     _chunk_rows_by_item_budget,
     batched_cypher_execute,
 )
@@ -83,7 +83,7 @@ def test_every_flat_row_reaches_a_statement_exactly_once_and_in_order() -> None:
         submitted.extend(row['uuid'] for row in params['rows'])
         return ([], None)
 
-    with patch('agent_neo.graph_db._core.db') as mock_db:
+    with patch('django_neomodel.graph_db._core.db') as mock_db:
         mock_db.cypher_query.side_effect = _capture
         batched_cypher_execute(
             _flat_rows(25), 'UNWIND $rows AS row MERGE (:X {uuid: row.uuid})',
@@ -95,7 +95,7 @@ def test_every_flat_row_reaches_a_statement_exactly_once_and_in_order() -> None:
 
 def test_flat_row_results_are_accumulated_across_chunks() -> None:
     """What a caller that does not re-read its writes counts to confirm they landed."""
-    with patch('agent_neo.graph_db._core.db') as mock_db:
+    with patch('django_neomodel.graph_db._core.db') as mock_db:
         mock_db.cypher_query.return_value = ([['written']], None)
         results = batched_cypher_execute(
             _flat_rows(25), 'UNWIND $rows AS row MERGE (n:X) RETURN n.uuid AS uuid',
@@ -132,7 +132,7 @@ def test_row_split_without_a_count_key_raises_before_any_statement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mock_db = MagicMock()
-    monkeypatch.setattr('agent_neo.graph_db._core.db', mock_db)
+    monkeypatch.setattr('django_neomodel.graph_db._core.db', mock_db)
 
     with pytest.raises(ValueError, match='allow_row_split=True requires a count_key'):
         batched_cypher_execute(

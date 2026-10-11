@@ -15,9 +15,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, LiteralString
 
+from django_neomodel.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from neomodel.sync_.database import db
-
-from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 
 from .enum import NodeLifecycleStatus, GraphEdgeKind
 

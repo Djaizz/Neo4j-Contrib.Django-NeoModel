@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from typing import TYPE_CHECKING, Any, ClassVar, Iterable, LiteralString
 
+from django_neomodel.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from django_neomodel.models import DjangoNeoModelWithCreatedAndUpdatedProps
 from neomodel.properties import (
     DateTimeNeo4jFormatProperty,
@@ -37,7 +38,6 @@ from neomodel.properties import (
 )
 from neomodel.sync_.database import db
 
-from agent_neo.graph_db import reconnect_neo4j_driver, retry_neo4j_cluster_operation
 from agent_neo.graph_db.cypher_templates import SCOPE_NAME_DB_PROPERTY
 from agent_neo.util.datetime import coerce_to_utc, coerce_to_utc_for_neo4j_datetime
 
