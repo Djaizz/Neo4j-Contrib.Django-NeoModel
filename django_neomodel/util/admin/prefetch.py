@@ -328,7 +328,7 @@ def format_prefetched_list_display_truncated(
     default: str = '-',
     sep: str = '   |   ',
     max_items: int = 5,
-    overflow_suffix: str = ' sessions',
+    overflow_suffix: str = ' items',
     strict: bool = False,
 ) -> str:
     """Format a prefetched list for list_display, showing up to max_items or 'N overflow_suffix'."""
