@@ -186,6 +186,16 @@ class _QueryDescriptor:
 NodeSet.query = _QueryDescriptor()
 
 
+# Django 6.1's ChangeList.get_ordering asks the queryset whether its ordering is already
+# total (`queryset.order_by(*ordering).totally_ordered`) before appending its `-pk`
+# tiebreak; a NodeSet carries no such attribute, so every changelist raised
+# AttributeError. "Not total" is the answer Django 6.0 reached for these models, which
+# report no unique field: the changelist appends `-pk`, and DjangoNeoModelAdmin
+# translates it to the primary-key property. A NodeSet that already answers keeps its own.
+if not hasattr(NodeSet, "totally_ordered"):
+    NodeSet.totally_ordered = False
+
+
 class NeoManager:
     def __init__(self, model):
         self.model = model

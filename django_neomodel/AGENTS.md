@@ -16,7 +16,7 @@ generic code applications build on.
 
 | Path | What lives there |
 | --- | --- |
-| `__init__.py` | `DjangoNode`, `DjangoField`, `NeoManager`, and the `NodeSet` patch the admin needs (`query`) |
+| `__init__.py` | `DjangoNode`, `DjangoField`, `NeoManager`, and the `NodeSet` patches the admin needs (`query`, `totally_ordered`) |
 | `admin.py` | `DjangoNeoModelAdmin`, `NeoModelChangeList`, and the neomodel `Q`-parsing patch |
 | `apps.py` | `NeomodelConfig` |
 | `management/commands/` | `install_labels`, `clear_neo4j` |
@@ -83,25 +83,35 @@ generic code applications build on.
   `order_by` is empty so no stray `pk` ordering leaks in.
 - **Necessity**: ✅ **Required** (Django's changelist reads it).
 
-#### 3. `_ObjectsDescriptor`
+#### 3. `NodeSet.totally_ordered`
+- **Purpose**: Every `NodeSet` reports its ordering as not total (`False`), unless
+  neomodel's `NodeSet` ever answers for itself.
+- **Justification**: Django 6.1's `ChangeList.get_ordering` asks
+  `queryset.order_by(*ordering).totally_ordered` before appending its `-pk` tiebreak; a
+  `NodeSet` lacked the attribute, so every changelist raised `AttributeError`. "Not total"
+  is Django 6.0's answer for these models (they report no unique field): the changelist
+  appends `-pk`, which `DjangoNeoModelAdmin` translates to the primary-key property.
+- **Necessity**: ✅ **Required** under Django 6.1 and later.
+
+#### 4. `_ObjectsDescriptor`
 - **Purpose**: Django-like `Model.objects`, returning `Model.nodes` (a `NodeSet`).
 - **Justification**: Django Admin and Django code expect an `.objects` manager; neomodel
   uses `.nodes`.
 - **Necessity**: ✅ **Required** for Django Admin compatibility.
 
-#### 4. `NeoManager`
+#### 5. `NeoManager`
 - **Purpose**: A Django-style manager whose `get_queryset()` returns a `NodeSet`.
 - **Justification**: Django Admin reads a model's default manager and calls its
   `get_queryset()`.
 - **Necessity**: ✅ **Required**.
 
-#### 5. `MetaClass`
+#### 6. `MetaClass`
 - **Purpose**: Extends neomodel's `NodeMeta` to set a `NeoManager` as each `DjangoNode`
   subclass's default manager, at class creation.
 - **Justification**: The manager must exist before Django Admin first reads it.
 - **Necessity**: ✅ **Required**.
 
-#### 6. `DjangoNode`
+#### 7. `DjangoNode`
 The base class for neomodel nodes with Django integration.
 
 - **`objects`** — the `_ObjectsDescriptor` above. ✅ Required.
@@ -123,7 +133,7 @@ The base class for neomodel nodes with Django integration.
   passes it, which would otherwise raise `TypeError`), else the attribute as a string.
   ✅ Required by Django Admin.
 
-#### 7. `classproperty`
+#### 8. `classproperty`
 - **Purpose**: A class-level property, for `_meta`.
 - **Necessity**: ✅ **Required** by the `_meta` implementation.
 
@@ -208,7 +218,8 @@ fixed lower down (for instance by making `NodeSet` meet Django Admin's expectati
 2. ✅ `DjangoNode` with `_meta`, `full_clean()`, `validate_unique()`,
    `validate_constraints()`, `serializable_value()` and the signal hooks
 3. ✅ `_ObjectsDescriptor` / `.objects`, `NeoManager`, `MetaClass`
-4. ✅ The per-`NodeSet` `query` (Django's changelist reads `query.order_by`)
+4. ✅ The per-`NodeSet` `query` (Django's changelist reads `query.order_by`) and the
+   `NodeSet.totally_ordered` answer (Django 6.1's changelist asks it)
 5. ✅ `NeomodelConfig`
 6. ✅ `DjangoNeoModelAdmin.get_ordering()`, `get_queryset()`, `get_search_results()` and
    `get_changelist()`, with `NeoModelChangeList`
