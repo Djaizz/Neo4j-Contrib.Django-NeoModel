@@ -7,6 +7,7 @@ context: [../AGENTS.md](../AGENTS.md) — what counts as generic, and the open-s
 
 | Module | Holds | Needs |
 | --- | --- | --- |
+| `fresh_queryset.py` | `fresh_root_queryset` — a new `NodeSet` over a DRF viewset's model for each request, because neomodel's `filter` / `order_by` mutate a `NodeSet` in place and DRF never clones one: a class-level `queryset` would carry one request's narrowing into the next | (Django REST framework, type-only) |
 | `json_safe.py` | `json_safe_structure` — a value made storable by a neomodel `JSONProperty`: datetimes and dates as ISO strings, sets as sorted lists, keys as strings, recursively; `coerce_json_mapping` — the mapping such a property reads back as, whether neomodel hands a dict or raw Cypher its JSON string | — |
 | `neo4j_datetime.py` | `coerce_to_fixed_offset_for_neo4j` — a `zoneinfo` / `pytz` datetime the Neo4j driver can serialize without crashing CPython's zoneinfo extension, its zone name kept; `apply_neo4j_datetime_coercion_patch` — routes `DateTimeNeo4jFormatProperty.deflate` through it: idempotent, never applied on import, so call it once at startup | — |
 | `openapi.py` | `DjangoNeoModelAutoSchema` — a drf-spectacular `AutoSchema` that gives every `DjangoField` a string schema | drf-spectacular |
