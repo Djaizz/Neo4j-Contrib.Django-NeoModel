@@ -3,15 +3,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, LiteralString, Optional, TYPE_CHECKING, TypeAlias
+from typing import (
+    Any, Callable, LiteralString, Optional, Protocol, TYPE_CHECKING, TypeAlias,
+)
 
 from django_neomodel.admin import DjangoNeoModelAdmin
 from neomodel.integration.pandas import to_dataframe
 from neomodel.sync_.database import db
 from neomodel.sync_.match import NodeSet
 from neomodel.sync_.node import StructuredNode
-
-from agent_neo.graph_db.queries import GraphDbQueryAndReturnHeaderList
 
 if TYPE_CHECKING:
     from rest_framework.viewsets import ReadOnlyModelViewSet
@@ -26,20 +26,37 @@ __all__: tuple[LiteralString, ...] = (
     "format_prefetched_count_display","format_prefetched_list_display",
     "format_prefetched_list_display_truncated","format_prefetched_scalar_display",
     "set_prefetch_attrs_from_entry","attach_prefetch_cache_to_filtered_queryset",
-    "PrefetchNotRunError",
+    "PrefetchNotRunError","CypherQueryAndReturnHeaders",
 )
+
+
+class CypherQueryAndReturnHeaders(Protocol):
+    """A batch Cypher query and the column names its RETURN clause yields, in order.
+
+    The prefetch helpers read nothing else from a query object, so any object with
+    these three members serves — typically a loaded ``.cypher`` file together with
+    its parsed RETURN headers.
+    """
+
+    @property
+    def query(self) -> str: ...
+
+    @property
+    def return_headers(self) -> list[str]: ...
+
+    def get_column_index(self, column_name: str) -> int: ...
 
 
 def run_prefetch(
     admin_or_viewset: DjangoNeoModelAdmin | ReadOnlyModelViewSet,
     *,
     queryset: NodeSet,
-    query_obj: GraphDbQueryAndReturnHeaderList,
+    query_obj: CypherQueryAndReturnHeaders,
     cypher_param_name_for_node_keys: str,
     result_row_key_column_name: str,
     node_key_name: str,
     build_prefetch_entry_from_row: Callable[
-        [CypherQueryResultRow, GraphDbQueryAndReturnHeaderList], PrefetchEntry
+        [CypherQueryResultRow, CypherQueryAndReturnHeaders], PrefetchEntry
     ],
     attach_prefetch_entry_to_node: Callable[[StructuredNode, PrefetchEntry], None],
 ) -> None:
@@ -120,7 +137,7 @@ def run_prefetch(
 
 def safe_list_from_row(
     row: CypherQueryResultRow,
-    query_obj: GraphDbQueryAndReturnHeaderList,
+    query_obj: CypherQueryAndReturnHeaders,
     column_name: str,
     *,
     row_len_check: bool = True,
@@ -160,7 +177,7 @@ def safe_list_from_row(
 
 def safe_scalar_from_row(
     row: CypherQueryResultRow,
-    query_obj: GraphDbQueryAndReturnHeaderList,
+    query_obj: CypherQueryAndReturnHeaders,
     column_name: str,
 ) -> Optional[str]:
     """Return a scalar string from a Cypher result row column; empty string becomes None.

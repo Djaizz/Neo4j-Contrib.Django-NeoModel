@@ -2,23 +2,24 @@
 
 `agent_neo` ships alongside `django_neomodel` in the same distribution. It provides reusable patterns for agent-oriented graph applications:
 
-- **Timestamped NeoModel base** — automatic `created` / `updated` audit fields
-- **Admin prefetch** — batch Cypher to avoid N+1 in Django Admin and DRF list views
 - **Graph DB helpers** — connection config, query loading, batch execution, cluster retry
 - **Analytical product engine** — ensure-on-read for layered computed nodes with design lifecycle
+
+It builds on the generic Django + NeoModel layer below it: `django_neomodel.models` (the timestamped node base, automatic `created` / `updated` audit fields) and `django_neomodel.util` (Neo4j-safe datetimes, batch-Cypher admin prefetch and search, OpenAPI schemas, fresh per-request querysets).
 
 ## Layering
 
 | Package | Role |
 |---------|------|
-| `django_neomodel` | Low-level Django ↔ NeoModel bridge |
-| `agent_neo` | Agent graph patterns (bases, prefetch, graph helpers, analytical product engine) |
+| `django_neomodel` | Django ↔ NeoModel bridge, generic node bases (`django_neomodel.models`) and utilities (`django_neomodel.util`) |
+| `agent_neo` | Agent graph patterns (graph helpers, analytical product engine, the `a3` algebra) |
 | Your domain app | Concrete node classes, business products, label registration |
 
 ## Quick start
 
 ```python
-from agent_neo.util.django_neomodel.models import DjangoNeoModelWithCreatedAndUpdatedProps, apply_neo4j_datetime_coercion_patch
+from django_neomodel.models import DjangoNeoModelWithCreatedAndUpdatedProps
+from django_neomodel.util.neo4j_datetime import apply_neo4j_datetime_coercion_patch
 from neomodel import StringProperty
 
 apply_neo4j_datetime_coercion_patch()  # optional; call once at startup if you use zoned datetimes
@@ -73,9 +74,9 @@ Use `AnalyticalProductRequest` with `scope_name` (your tenant/scope identifier) 
 pip install django_neomodel[agent-openapi,agent-drf]
 ```
 
-- `agent-openapi` — `DjangoNeoModelAutoSchema` in `agent_neo.util.django_neomodel.models` for `DjangoField`
+- `agent-openapi` — `DjangoNeoModelAutoSchema` in `django_neomodel.util.openapi` for `DjangoField`
 - `agent-drf` — reserved for future DRF integrations
 
 ## Neo4j datetime patch
 
-`apply_neo4j_datetime_coercion_patch()` is **not** applied on import. Call it explicitly during Django startup if you serialize `zoneinfo` datetimes through Neo4j.
+`django_neomodel.util.neo4j_datetime.apply_neo4j_datetime_coercion_patch()` is **not** applied on import. Call it explicitly during Django startup if you serialize `zoneinfo` datetimes through Neo4j.

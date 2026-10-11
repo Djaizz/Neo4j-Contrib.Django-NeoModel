@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from agent_neo.util.django_neomodel.admin.prefetch import (
+from django_neomodel.util.admin.prefetch import (
     PrefetchNotRunError,
     format_prefetched_count_display,
     format_prefetched_list_display,

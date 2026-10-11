@@ -1,271 +1,282 @@
-# Django-NeoModel Key Affordances and Interfaces Survey
+# AGENTS.md — `django_neomodel`
 
-This document enumerates all key affordances and interfaces implemented in Django-NeoModel, along with justifications for their necessity.
+Orientation for coding agents working in this package: what it is, where generic
+Django + NeoModel code goes, and a survey of every affordance it implements, with why
+Django needs each one.
 
 ---
 
-## Module: `__init__.py`
+## What this package is
 
-### 1. **`DjangoField` class** (lines 38-161)
-- **Purpose**: Wraps NeoModel `Property` objects to mimic Django `Field` API
-- **Justification**: Django Admin and forms expect Django `Field` objects with attributes like `name`, `verbose_name`, `formfield()`, `has_default()`, etc. NeoModel `Property` objects don't have this interface.
+The bridge between Django and neomodel. `DjangoNode` makes a neomodel `StructuredNode`
+look enough like a Django model for the admin, forms, Django REST framework and
+drf-spectacular; `DjangoNeoModelAdmin` runs the admin over `NodeSet`s; `NeomodelConfig`
+feeds neomodel its settings from Django's. Beside the bridge, two subpackages hold the
+generic code applications build on.
+
+| Path | What lives there |
+| --- | --- |
+| `__init__.py` | `DjangoNode`, `DjangoField`, `NeoManager`, and the `NodeSet` patch the admin needs (`query`) |
+| `admin.py` | `DjangoNeoModelAdmin`, `NeoModelChangeList`, and the neomodel `Q`-parsing patch |
+| `apps.py` | `NeomodelConfig` |
+| `management/commands/` | `install_labels`, `clear_neo4j` |
+| `models/` | Abstract node bases — see [models/AGENTS.md](models/AGENTS.md) |
+| `util/` | Generic utilities, one concern per module — see [util/AGENTS.md](util/AGENTS.md) |
+
+`agent_neo`, shipped in the same distribution, builds on this package.
+
+## Where generic code goes
+
+- **Generic** means it deals only with Django, neomodel, the Neo4j driver and their
+  optional integrations (Django REST framework, drf-spectacular): no application concept,
+  no domain vocabulary. Code that knows an application's concepts stays in that
+  application.
+- **A node base class goes in `models/`; anything else goes in `util/`**, in a module
+  named for its one concern.
+- **This package imports nothing from `agent_neo` or from any application.** The layering
+  runs one way: applications → `agent_neo` → `django_neomodel` → neomodel.
+- **This is public, open-source code.** No customer, product, site or project names,
+  identifiers or design-document citations, in code, comments, docstrings, tests, data or
+  commit messages. Examples use neutral vocabulary (books, shelves, libraries).
+- An optional dependency is imported only by the module that needs it (type-only imports
+  under `TYPE_CHECKING`), so importing the package never requires it.
+
+## Tests
+
+- `tests/django_neomodel/` — unit tests of the generic layer (`models/`, `util/`); no
+  Neo4j server needed.
+- `tests/someapp/` — the integration tests, against a live Neo4j: CI starts one with
+  `scripts/docker-neo4j.sh`, then runs `tests/manage.py install_labels` and `migrate`
+  before `pytest`.
+- `pyproject.toml` points pytest at `tests.settings`.
+
+---
+
+## Affordance survey
+
+### Module: `__init__.py`
+
+#### 1. `DjangoField`
+- **Purpose**: Wraps a neomodel `Property` in the Django `Field` API.
+- **Justification**: Django Admin, forms and DRF expect Django `Field` objects with
+  attributes like `name`, `attname`, `verbose_name`, `help_text`, `blank`, `choices`, and
+  methods like `formfield()` and `has_default()`. A neomodel `Property` has none of them.
 - **Key attributes**:
-  - `empty_values = [None, '']` - Django's `display_for_field()` expects `field.empty_values`
-- **Key methods**:
-  - `formfield()` - Converts to Django form field
-  - `save_form_data()` - Saves form data to instance
-  - `value_from_object()` - Extracts value from instance
-  - `get_choices()` - Handles choice fields
-- **Necessity**: ✅ **Required** for Django Admin/forms integration
+  - `empty_values = [None, '']` — Django's `display_for_field()` reads `field.empty_values`
+  - `remote_field = None` — DRF reads it on every field
+- **Key methods**: `formfield()` (the Django form field), `save_form_data()`,
+  `value_from_object()`, `get_choices()`, `to_python()`
+- **Necessity**: ✅ **Required** for Django Admin, forms and DRF.
 
-### 2. **`Query` dataclass** (lines 164-168)
-- **Purpose**: Mimics Django QuerySet's `query` attribute for Django Admin compatibility
-- **Justification**: Django Admin expects querysets to have a `query` attribute with `order_by`. NeoModel `NodeSet` doesn't have this.
-- **Necessity**: ⚠️ **Potentially removable** - May not be used if Django Admin doesn't actually need it
+#### 2. `Query` dataclass and its per-`NodeSet` descriptor
+- **Purpose**: Gives every `NodeSet` its own Django-style `query` (`select_related=False`,
+  `order_by=[]`).
+- **Justification**: Django's `ChangeList.get_ordering` reads `queryset.query.order_by`,
+  and `DjangoNeoModelAdmin.get_queryset` writes the translated ordering there. A
+  descriptor, not a class attribute, so `NodeSet`s never share one `Query`; the default
+  `order_by` is empty so no stray `pk` ordering leaks in.
+- **Necessity**: ✅ **Required** (Django's changelist reads it).
 
-### 3. **`_ObjectsDescriptor` class** (lines 171-184)
-- **Purpose**: Provides Django-like `.objects` API (`Model.objects.all()` instead of `Model.nodes.all()`)
-- **Justification**: Django Admin and Django code expect `.objects` manager. NeoModel uses `.nodes`.
-- **Necessity**: ✅ **Required** for Django Admin compatibility and Django-like API
+#### 3. `_ObjectsDescriptor`
+- **Purpose**: Django-like `Model.objects`, returning `Model.nodes` (a `NodeSet`).
+- **Justification**: Django Admin and Django code expect an `.objects` manager; neomodel
+  uses `.nodes`.
+- **Necessity**: ✅ **Required** for Django Admin compatibility.
 
-### 4. **`NeoManager` class** (lines 186-198)
-- **Purpose**: Django-style manager wrapper for NeoModel nodes that provides `get_queryset()` method
-- **Justification**: Django Admin expects models to have `_default_manager` attribute pointing to a manager-like object with `get_queryset()`. This wrapper provides that interface.
-- **Key methods**:
-  - `__init__(model)` - Initializes manager with the model class
-  - `get_queryset()` - Returns a `NodeSet` for the model
-- **Necessity**: ✅ **Required** for Django Admin compatibility (Django Admin accesses `_default_manager`)
+#### 4. `NeoManager`
+- **Purpose**: A Django-style manager whose `get_queryset()` returns a `NodeSet`.
+- **Justification**: Django Admin reads a model's default manager and calls its
+  `get_queryset()`.
+- **Necessity**: ✅ **Required**.
 
-### 5. **`MetaClass` class** (lines 201-213)
-- **Purpose**: Metaclass that extends NeoModel's `NodeMeta` to automatically set `_default_manager` on DjangoNode subclasses
-- **Justification**: Django Admin expects models to have `_default_manager` attribute. This metaclass ensures it's set during class creation, before Django Admin tries to access it.
-- **Implementation**: Extends `NodeMeta` and sets `_default_manager = NeoManager(new_cls)` in `__new__()`
-- **Necessity**: ✅ **Required** for Django Admin compatibility (sets `_default_manager` at class creation time)
+#### 5. `MetaClass`
+- **Purpose**: Extends neomodel's `NodeMeta` to set a `NeoManager` as each `DjangoNode`
+  subclass's default manager, at class creation.
+- **Justification**: The manager must exist before Django Admin first reads it.
+- **Necessity**: ✅ **Required**.
 
-### 6. **`DjangoNode` class** (lines 216-344)
-- **Purpose**: Base class for NeoModel nodes with Django integration
-- **Justification**: Bridges NeoModel and Django expectations
+#### 6. `DjangoNode`
+The base class for neomodel nodes with Django integration.
 
-**Key methods/attributes:**
+- **`objects`** — the `_ObjectsDescriptor` above. ✅ Required.
+- **`_meta`** (a `classproperty`) — builds Django `Options` from the node's properties
+  (one `DjangoField` each), sets `concrete_model` to the class (drf-spectacular reads it),
+  and installs a `pk` property returning the primary-key value — a `property` subclass
+  carrying `.name`, which the admin reads. `unique_together` raises
+  `NotImplementedError`. ✅ Required: Django Admin introspects `Model._meta`.
+- **`full_clean()`** — validates through neomodel's deflation and raises Django
+  `ValidationError`s. ✅ Required: Django forms call it before saving.
+- **`validate_unique()`** — checks unique-indexed properties against existing nodes.
+  ✅ Required: Django forms call it.
+- **`validate_constraints()`** — a no-op (no Django ORM constraints exist here).
+  ✅ Required: Django Admin's `ModelForm` calls it.
+- **Django signals** — `pre_save()`, `post_save()`, `pre_delete()`, `post_delete()` send
+  Django's signals while the `NEOMODEL_SIGNALS` setting is true (the default).
+  ✅ Required when Django apps listen for model lifecycle signals.
+- **`serializable_value()`** — returns `None` for `attr=None` (Django Admin sometimes
+  passes it, which would otherwise raise `TypeError`), else the attribute as a string.
+  ✅ Required by Django Admin.
 
-#### **`objects` attribute** (line 192)
-- **Purpose**: Django-like manager accessor
-- **Justification**: Django Admin expects `Model.objects.all()`
-- **Necessity**: ✅ **Required**
-
-#### **`_meta` classproperty** (lines 194-234)
-- **Purpose**: Creates Django `Options` object with field metadata
-- **Justification**: Django Admin uses `Model._meta` for introspection (fields, verbose_name, etc.)
-- **Key features**:
-  - Converts NeoModel properties to `DjangoField` objects
-  - Creates `pk` property that returns actual primary key value (not Property object)
-  - Uses `PkProperty` to support Django Admin's expectation of `pk.name`
-- **Necessity**: ✅ **Required** for Django Admin
-
-#### **`full_clean()` method** (lines 236-254)
-- **Purpose**: Validates node and raises Django `ValidationError`
-- **Justification**: Django forms call `full_clean()` before saving
-- **Necessity**: ✅ **Required** for Django forms integration
-
-#### **`validate_unique()` method** (lines 256-277)
-- **Purpose**: Validates unique constraints
-- **Justification**: Django forms call this during validation
-- **Necessity**: ✅ **Required** for Django forms integration
-
-#### **`validate_constraints()` method** (lines 303-313)
-- **Purpose**: No-op method for Django Admin compatibility
-- **Justification**: Django Admin's `ModelForm` calls `validate_constraints()` on model instances
-- **Necessity**: ✅ **Required** (no-op is fine since NeoModel doesn't have Django ORM constraints)
-
-#### **Django Signals Integration** (lines 279-298)
-- **Methods**: `pre_save()`, `post_save()`, `pre_delete()`, `post_delete()`
-- **Purpose**: Emits Django signals for lifecycle events
-- **Justification**: Django apps expect signals for model lifecycle events
-- **Necessity**: ✅ **Required** if Django apps depend on signals
-
-#### **`serializable_value()` method** (lines 300-301)
-- **Purpose**: Returns serializable value for a field
-- **Justification**: Django Admin calls this for serialization
-- **Necessity**: ✅ **Required** for Django Admin
-
-### 7. **`classproperty` decorator** (lines 26-34)
-- **Purpose**: Creates class-level properties (like `_meta`)
-- **Justification**: `_meta` needs to be a class property, not an instance property
-- **Necessity**: ✅ **Required** for `_meta` implementation
-
-### 8. **`DjangoNode.serializable_value()` method** (in `DjangoNode` class, lines 336-342)
-- **Purpose**: Handles `None` field names (Django Admin sometimes passes `None`)
-- **Justification**: Django Admin sometimes calls `serializable_value(None)`, which causes `TypeError`
-- **Necessity**: ✅ **Required** to prevent crashes in Django Admin
-- **Implementation**: Implemented directly in `DjangoNode.serializable_value()` method to handle edge cases
+#### 7. `classproperty`
+- **Purpose**: A class-level property, for `_meta`.
+- **Necessity**: ✅ **Required** by the `_meta` implementation.
 
 ---
 
-## Module: `admin.py`
+### Module: `admin.py`
 
-### 1. **`DjangoNeoModelAdmin` class** (lines 22-236)
-- **Purpose**: Base `ModelAdmin` for NeoModel nodes
-- **Justification**: Django Admin needs customizations to work with NeoModel
-- **Note**: Unlike `DjangoNode` integrations (which are **reactive** - Django calls/accesses them), these are **proactive** overrides of Django Admin's defaults. Their necessity depends on whether the underlying incompatibilities could be fixed at a lower level (e.g., making NodeSet compatible with Django Admin's expectations).
+#### 1. The `Q`-filters parsing patch
+- **What**: `QueryBuilder._parse_q_filters` is replaced on module import (see
+  **Key intercepts** below for why).
+- **Necessity**: ✅ **Required** while neomodel's parser mis-detects nested `Q` objects.
 
-**Key methods:**
+#### 2. `NeoModelChangeList`
+- **`get_queryset()`** — for a `NodeSet` root: applies the list filters, then the search
+  on the clean root, then the ordering; it skips Django's `filter(<Django Q>)` and
+  `apply_select_related`, both of which corrupt or break a `NodeSet`.
+- **`get_results()`** — replaces `result_list` with the paginator's page: a `NodeSet`'s
+  `_clone()` may drop its filters, so iterating it could list every node while the
+  paginator counts only the filtered ones.
+- **Necessity**: ✅ **Required** for search and filters on `NodeSet` changelists.
 
-#### **Permission methods** (lines 35-65)
-- `has_add_permission()`, `has_change_permission()`, `has_delete_permission()`, `has_view_permission()`, `has_view_or_change_permission()`
-- **Purpose**: Bypass Django's permission system (all return `True`)
-- **Justification**: NeoModel doesn't integrate with Django's auth system
-- **Necessity**: ✅ **Required** for Django Admin to display pages
-- **Validation needed**: ⚠️ Could Django Admin work without these if we integrated with Django's auth system?
+#### 3. `DjangoNeoModelAdmin`
+The base `ModelAdmin` for neomodel nodes. Unlike the `DjangoNode` integrations (reactive —
+Django calls or reads them), these are proactive overrides of Django Admin's defaults;
+whether each is necessary depends on whether the incompatibility it works around could be
+fixed lower down (for instance by making `NodeSet` meet Django Admin's expectations).
 
-#### **`get_ordering()` method** (lines 71-101)
-- **Purpose**: Translates `pk` to actual primary key field name (e.g., `label`) for NeoModel compatibility
-- **Justification**: Django Admin uses `pk` for ordering, but NeoModel doesn't recognize `pk` as a property. NeoModel requires the actual property name (e.g., `label`).
-- **Implementation**:
-  - Gets primary key field name from `model._meta.pk.name`
-  - Translates `'pk'` and `'-pk'` to actual field names
-  - Returns translated ordering list
-- **Necessity**: ✅ **Required** - NeoModel's query builder validates property names and will raise `ValueError` if `pk` is used
-
-#### **`get_queryset()` method** (lines 103-200)
-- **Purpose**: Returns NodeSet with translated ordering and intercepts `order_by()` calls to translate `pk`
-- **Justification**:
-  - Django Admin expects a queryset; `model.objects` returns a NodeSet (not `model.objects.all()` which returns a list)
-  - Must apply translated ordering from `get_ordering()`
-  - Must wrap `order_by()` to intercept any `pk` usage (Django Admin may apply ordering after `get_queryset()` returns)
-- **Key features**:
-  - Uses `model.objects` directly (NodeSet), not `model.objects.all()` (list)
-  - Applies translated ordering from `get_ordering()`
-  - Wraps NodeSet's `order_by()` method to automatically translate `pk` to actual field name
-  - Ensures wrapper is applied to cloned NodeSets (when `order_by()` returns a new NodeSet)
-  - Safety check: Cleans `order_by_elements` to remove any `pk` that slipped through
-- **Necessity**: ✅ **Required** -
-  - Must use NodeSet directly (not `.all()` which returns a list)
-  - Must translate `pk` before NeoModel's query builder validates properties
-  - Must intercept `order_by()` because Django Admin may apply ordering after `get_queryset()` returns
-
-#### **`get_object()` method** (lines 240-280)
-- **Purpose**: Retrieves single object by primary key
-- **Justification**: Django Admin's default `get_object()` expects a queryset with a `.model` attribute (line 881 in Django's `options.py`), but NeoModel `NodeSet` doesn't have that. This override directly queries the NeoModel node by the field marked with `primary_key=True`.
-- **Implementation**:
-  - Gets the pk field from `model.pk` (set by `DjangoNode._meta`)
-  - Uses `model.objects.get(**{pk_field_name: object_id})` to query directly
-  - Handles `DoesNotExist` exceptions and converts to Django's `Http404`
-- **Necessity**: ✅ **Required** - Django Admin's default `get_object()` accesses `queryset.model`, which `NodeSet` doesn't have. Without this override, Django Admin will raise `AttributeError: 'NodeSet' object has no attribute 'model'`.
-
-#### **`get_search_results()` method** (lines 484-520)
-- **Purpose**: Implements search using NeoModel's `Q` objects
-- **Justification**: Django Admin's default uses Django ORM `Q` objects. NeoModel has its own `Q` objects.
-- **Implementation**:
-  - Builds a single Q object with OR conditions for all search fields
-  - Directly manipulates `q_filters` using `&` operator (avoids `filter()` which wraps in Q())
-  - The monkey-patch ensures Q objects in children are handled correctly
-- **Necessity**: ✅ **Required** - Django Admin's default uses Django ORM `Q` objects, which are incompatible with NeoModel's `Q` objects. NeoModel requires its own `Q` objects for filtering.
-
-#### **`get_changelist()` method** (lines 154-180)
-- **Purpose**: Error handling wrapper for ChangeList creation
-- **Justification**: Better error visibility during debugging
-- **Necessity**: ⚠️ **Debugging helper**, not strictly required
-
-#### **`changelist_view()` method** (lines 182-236)
-- **Purpose**: Error handling wrapper that returns HTML error page
-- **Justification**: Better error visibility during debugging
-- **Necessity**: ⚠️ **Debugging helper**, not strictly required
+- **Option defaults** — no foreign-key or many-to-many options (neomodel has neither);
+  `date_hierarchy = None`, because `DjangoField` has no `get_internal_type()`.
+- **Permission methods** — `has_add_permission()`, `has_view_permission()`,
+  `has_change_permission()`, `has_view_or_change_permission()`,
+  `has_delete_permission()` all allow. Required for the admin to display pages, since
+  neomodel nodes are not wired into Django's auth system. ⚠️ Could the admin work without
+  them if they were?
+- **`get_ordering()`** — translates `pk` / `-pk` to the primary-key property (neomodel's
+  query builder rejects `pk`); orders by the primary key when nothing else is given, and
+  returns no ordering when the model has no primary key. ✅ Required.
+- **`get_search_results()`** — Django Admin's search semantics with neomodel `Q`: the
+  term is split with `smart_split` (quoted phrases stay one term), every term must match
+  at least one `search_fields` entry (OR across fields, AND across terms), and the
+  `^` / `=` / `@` prefixes select `istartswith` / `iexact` / `search` (default
+  `icontains`). No distinct is needed. ✅ Required: Django's default builds Django ORM
+  `Q` objects.
+- **`get_queryset()`** — returns `model.objects` (a `NodeSet`; `objects.all()` would be a
+  list), wraps its `order_by()` so `pk` is translated even when the admin orders later
+  (and carries the wrapper onto the `NodeSet`s `order_by()` returns), applies
+  `get_ordering()`, keeps `query.order_by` in step, makes sure `q_filters` is a `Q`, and
+  finally re-translates any `pk` left in `order_by_elements`. ✅ Required.
+- **`get_changelist()`** — returns `NeoModelChangeList` (inside an error-logging
+  wrapper). ✅ Required for the class it returns.
+- **`changelist_view()`**, **`changeform_view()`** — error-logging wrappers;
+  `changelist_view()` answers an HTML error page under `DEBUG`. ⚠️ Debugging helpers.
+- **`get_readonly_fields()`**, **`get_form()`** — keep neomodel's internal
+  `element_id` / `element_id_property` out of admin forms.
+- There is no `get_object()` override: Django's default reads `queryset.model`, which
+  neomodel's `NodeSet` provides, and the primary-key field from `_meta`.
 
 ---
 
-## Module: `apps.py`
+### Module: `apps.py`
 
-### 1. **`NeomodelConfig` class** (lines 6-22)
-- **Purpose**: Django AppConfig that reads NeoModel settings from Django settings
-- **Justification**: Integrates NeoModel configuration with Django's settings system
-- **Key features**:
-  - Reads `NEOMODEL_NEO4J_BOLT_URL` from Django settings
-  - Reads `NEOMODEL_FORCE_TIMEZONE` from Django settings
-  - Reads `NEOMODEL_MAX_CONNECTION_POOL_SIZE` from Django settings
-- **Necessity**: ✅ **Required** for NeoModel to work within Django
+#### `NeomodelConfig`
+- **Purpose**: The AppConfig; `ready()` copies `NEOMODEL_NEO4J_BOLT_URL`,
+  `NEOMODEL_FORCE_TIMEZONE` and `NEOMODEL_MAX_CONNECTION_POOL_SIZE` from Django's
+  settings into neomodel's `config` (neomodel 7 warns that these legacy attributes are
+  deprecated in favour of its `get_config()` API).
+- **Necessity**: ✅ **Required** for neomodel to take its configuration from Django.
 
 ---
 
-## Module: `management/commands/`
+### Module: `management/commands/`
 
-### 1. **`install_labels` command** (lines 7-11)
-- **Purpose**: Django management command wrapper for `neomodel.install_all_labels()`
-- **Justification**: Provides Django-style command interface for NeoModel operations
-- **Necessity**: ⚠️ **Convenience feature**, not strictly required
-
-### 2. **`clear_neo4j` command** (lines 6-11)
-- **Purpose**: Django management command wrapper for `neomodel.clear_neo4j_database()`
-- **Justification**: Provides Django-style command interface for NeoModel operations
-- **Necessity**: ⚠️ **Convenience feature**, not strictly required
+- **`install_labels`** — wraps `neomodel.install_all_labels()`. ⚠️ Convenience.
+- **`clear_neo4j`** — wraps `neomodel.clear_neo4j_database()`. ⚠️ Convenience.
 
 ---
 
 ## Summary
 
-### **Core Requirements (Fully Justified - Reactive to Django's API):**
-1. ✅ `DjangoField` - Required for Django Admin/forms (Django accesses field attributes)
-2. ✅ `DjangoNode` with `_meta`, `full_clean()`, `validate_unique()`, `validate_constraints()`, `serializable_value()` - Required (Django calls these methods)
-3. ✅ `_ObjectsDescriptor` / `.objects` - Required (Django Admin expects `Model.objects.all()`)
-4. ✅ `NeoManager` - Required (Django Admin expects `_default_manager` with `get_queryset()` method)
-5. ✅ `MetaClass` - Required (sets `_default_manager` during class creation for Django Admin compatibility)
-6. ✅ Django Signals Integration - Required (if Django apps depend on signals)
-7. ✅ `DjangoField.empty_values` class attribute - Required (Django's `display_for_field()` accesses this)
-8. ✅ `NeomodelConfig` - Required for NeoModel configuration in Django
-9. ✅ `DjangoNeoModelAdmin.get_ordering()` - Required (translates `pk` to actual field name for NeoModel compatibility)
-10. ✅ `DjangoNeoModelAdmin.get_queryset()` - Required (uses NodeSet directly, applies translated ordering, intercepts `order_by()` to translate `pk`)
-11. ✅ `DjangoNeoModelAdmin.get_object()` - Required (Django Admin's default expects `queryset.model`, which NodeSet doesn't have)
-12. ✅ `DjangoNeoModelAdmin.get_search_results()` - Required (converts Django Admin search to NeoModel Q objects)
-13. ✅ **Q Filters Parsing Monkey-Patch** (in `admin.py`, lines 16-78) - Required (fixes NeoModel bug where `isinstance(child, QBase)` fails for nested Q objects)
+### Core requirements (reactive to Django's API, or required by the admin pipeline)
+1. ✅ `DjangoField`, including `empty_values` and `remote_field`
+2. ✅ `DjangoNode` with `_meta`, `full_clean()`, `validate_unique()`,
+   `validate_constraints()`, `serializable_value()` and the signal hooks
+3. ✅ `_ObjectsDescriptor` / `.objects`, `NeoManager`, `MetaClass`
+4. ✅ The per-`NodeSet` `query` (Django's changelist reads `query.order_by`)
+5. ✅ `NeomodelConfig`
+6. ✅ `DjangoNeoModelAdmin.get_ordering()`, `get_queryset()`, `get_search_results()` and
+   `get_changelist()`, with `NeoModelChangeList`
+7. ✅ The `Q`-filters parsing patch
 
-### **Needs Validation (Proactive Overrides - May Be Unnecessary):**
-1. ⚠️ `DjangoNeoModelAdmin` permission methods - Could Django Admin work without these if we integrated with Django's auth system?
-2. ⚠️ `DjangoNeoModelAdmin.get_object()` - Could Django Admin's default work if NodeSet's `.get()` method properly handled custom primary keys?
+### Needs validation (proactive overrides that may be unnecessary)
+1. ⚠️ `DjangoNeoModelAdmin`'s permission methods — could Django Admin work without them if
+   neomodel nodes were integrated with Django's auth system?
 
-### **Potentially Removable (Debugging/Convenience):**
-1. ⚠️ `Query` dataclass - May not be used if Django Admin doesn't need it
-2. ⚠️ `DjangoNeoModelAdmin.get_changelist()` - Debugging helper
-3. ⚠️ `DjangoNeoModelAdmin.changelist_view()` - Debugging helper
-4. ⚠️ Management commands - Convenience features
+### Potentially removable (debugging and convenience)
+1. ⚠️ The error-logging wrappers in `get_changelist()`, `changelist_view()` and
+   `changeform_view()`
+2. ⚠️ The management commands
 
-### **Key Intercepts and Overrides:**
+---
 
-#### **Primary Key (`pk`) Translation Intercept**
-- **Problem**: Django Admin uses `pk` for ordering, but NeoModel doesn't recognize `pk` as a property. NeoModel requires the actual property name (e.g., `label`).
-- **Solution**: Multi-layered intercept strategy:
-  1. **`get_ordering()` override**: Translates `pk` → actual field name when Django Admin requests ordering
-  2. **`get_queryset()` override**:
-     - Applies translated ordering from `get_ordering()`
-     - Wraps NodeSet's `order_by()` method to intercept any `pk` usage
-     - Ensures wrapper propagates to cloned NodeSets
-  3. **Safety check**: Cleans `order_by_elements` before returning queryset to catch any `pk` that slipped through
-- **Why necessary**: NeoModel's query builder validates property names at query build time (line 545 in `neomodel/sync_/match.py`), raising `ValueError` if `pk` is used. Django Admin may apply ordering after `get_queryset()` returns, so we must intercept at the `order_by()` level.
+## Key intercepts
 
-#### **NodeSet vs List Distinction**
-- **Problem**: `model.objects.all()` returns a `list`, not a `NodeSet`. Django Admin expects a queryset-like object.
-- **Solution**: Use `model.objects` directly (which is a NodeSet via `_ObjectsDescriptor`), not `model.objects.all()`.
-- **Why necessary**: Django Admin's ChangeList and paginator expect a queryset-like object with methods like `count()`, `order_by()`, etc. A `list` doesn't have these methods.
+### Primary key (`pk`) translation
+- **Problem**: Django Admin orders by `pk`, but neomodel knows no property named `pk`; its
+  query builder validates property names when it builds the query and raises
+  `ValueError` on `pk`.
+- **Solution**, in layers:
+  1. `get_ordering()` translates `pk` to the primary-key property when the admin asks
+     for the ordering.
+  2. `get_queryset()` applies that ordering and wraps the `NodeSet`'s `order_by()` to
+     translate any later `pk`, carrying the wrapper onto the `NodeSet`s it returns.
+  3. A final pass cleans `order_by_elements` of any `pk` that slipped through.
+- **Why necessary**: Django Admin may apply ordering after `get_queryset()` returns, so
+  the translation has to sit at the `order_by()` level too.
 
-#### **Query Descriptor Pattern**
-- **Problem**: `Query` dataclass was patched as a class attribute, meaning all NodeSet instances shared the same `Query` object with default `order_by: ["pk"]`.
-- **Solution**: Changed `Query` to a descriptor (`_QueryDescriptor`) that returns a per-instance `Query` object, and changed default `order_by` to empty list.
-- **Why necessary**: Prevents default `pk` ordering from interfering with our translation logic.
+### `NodeSet`, not a list
+- **Problem**: `model.objects.all()` returns a `list`, but Django Admin's changelist and
+  paginator need a queryset-like object (`count()`, `order_by()`, …).
+- **Solution**: use `model.objects` itself, which is a `NodeSet` (via
+  `_ObjectsDescriptor`).
 
-#### **Q Filters Parsing Issue (Monkey-Patch Fix)**
-- **Problem**: NeoModel's `_parse_q_filters` method has a bug where `isinstance(child, QBase)` returns `False` for Q objects that are nested as children in `q_filters`. This occurs when:
-  - `filter()` is called, which does: `self.q_filters = Q(self.q_filters & Q(...))` (wraps in another Q)
-  - Q objects are combined using `&` operator, creating nested Q structures
-  - The parser tries to subscript Q objects as tuples (`child[0]`, `child[1]`), causing `"'Q' object is not subscriptable"` errors
-- **Root Cause**: The `isinstance(child, QBase)` check in `_parse_q_filters` (line 896 in `neomodel/sync_/match.py`) fails to recognize Q objects as QBase instances, even though `Q` inherits from `QBase`. This may be due to import/class hierarchy issues or how Q objects are created when wrapped.
-- **Solution**: Monkey-patch `QueryBuilder._parse_q_filters` with enhanced Q object detection:
-  1. **Multiple detection methods**: Uses `isinstance(child, QBase)`, `isinstance(child, Q)`, and `type(child).__name__ == 'Q'` as fallback
-  2. **Error handling**: If subscripting fails, checks if child has Q-like attributes (`children`, `connector`) and handles it as a Q object
-  3. **Recursive calls**: Uses `self._parse_q_filters` (the patched version) for recursive calls to ensure all nested levels are handled
-- **Implementation**: Applied on module import in `admin.py` (lines 16-78) to ensure it's active before any QueryBuilder instances are created
-- **Why necessary**: Without this patch, any `q_filters` structure with nested Q objects (from `filter()` or `&` operations) will cause parsing errors. The patch ensures Q objects are always recognized and processed correctly, regardless of whether `isinstance()` works properly.
-- **Note**: This is a workaround for a NeoModel bug. Ideally, NeoModel should fix `_parse_q_filters` to properly recognize Q objects, but the monkey-patch ensures compatibility in the meantime.
+### The `query` descriptor
+- **Problem**: patched as a class attribute, one `Query` object — with a default
+  `order_by` of `["pk"]` — was shared by every `NodeSet`.
+- **Solution**: a descriptor returning a per-instance `Query`, with an empty default
+  `order_by`, so no default `pk` ordering interferes with the translation.
 
-### **Questions to Validate:**
-1. Is `Query` dataclass actually used anywhere? (grep for `query.order_by` or `query.select_related`)
-2. Can error handling in `get_changelist()` and `changelist_view()` be simplified or removed?
-3. Are management commands actually used, or can users call NeoModel functions directly?
-4. **For `DjangoNeoModelAdmin` overrides**: Could these be eliminated by fixing incompatibilities at the NodeSet/DjangoNode level instead?
+### The changelist pipeline
+- **Problem**: Django's `ChangeList.get_queryset()` filters with a Django `Q` and calls
+  `apply_select_related` before the search runs, corrupting a `NodeSet`; its
+  `get_results()` iterates a `_clone()` that may have lost the filters.
+- **Solution**: `NeoModelChangeList` searches on the clean root, orders afterwards, skips
+  both Django ORM steps, and lists the paginator's page.
+
+### `Q`-filters parsing (monkey-patch)
+- **Problem**: neomodel's `_parse_q_filters` checks `isinstance(child, QBase)` and, for
+  `Q` objects nested as children of `q_filters`, gets `False` — so it subscripts the `Q`
+  as a tuple (`child[0]`, `child[1]`) and fails with `"'Q' object is not
+  subscriptable"`. Nesting happens whenever `filter()` wraps the existing filters
+  (`self.q_filters = Q(self.q_filters & Q(...))`) or `Q` objects are combined with `&`.
+- **Root cause**: the `isinstance` check does not recognize those `Q` objects even though
+  `Q` subclasses `QBase` — possibly an import or class-hierarchy issue, or how wrapped `Q`
+  objects are created.
+- **Solution**: `QueryBuilder._parse_q_filters` is replaced, on module import, with a
+  version that:
+  1. detects a `Q` by `isinstance(child, QBase)`, `isinstance(child, Q)`, or the type
+     name;
+  2. treats a child that cannot be subscripted but has `children` and `connector` as a
+     `Q`;
+  3. recurses through the patched method, so every nesting level is handled.
+- **Note**: a workaround for a neomodel bug; the fix belongs in neomodel.
+
+---
+
+## Questions to validate
+
+1. Can the error handling in `get_changelist()`, `changelist_view()` and
+   `changeform_view()` be simplified or removed?
+2. Are the management commands used, or do users call neomodel's functions directly?
+3. Could `DjangoNeoModelAdmin`'s overrides be eliminated by fixing the incompatibilities
+   at the `NodeSet` / `DjangoNode` level instead?

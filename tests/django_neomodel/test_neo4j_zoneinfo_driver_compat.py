@@ -17,7 +17,7 @@ import neo4j
 import pytest
 from neo4j.time import DateTime as Neo4jDateTime
 
-from agent_neo.util.django_neomodel.models import coerce_to_fixed_offset_for_neo4j
+from django_neomodel.util.neo4j_datetime import coerce_to_fixed_offset_for_neo4j
 
 
 SCOPE_ZONE = ZoneInfo("Asia/Kathmandu")
