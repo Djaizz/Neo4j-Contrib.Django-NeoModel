@@ -43,16 +43,16 @@ __all__: tuple[LiteralString, ...] = (
 
 GRAPH_DB_BATCH_SIZE: int = 10**4
 NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS: int = int(
-    os.environ.get('AGENT_NEO_NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS', '5')
+    os.environ.get('DJANGO_NEOMODEL_NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS', '5')
 )
 NEO4J_CLUSTER_LEADER_SWITCH_RETRY_DELAY_SECONDS: float = float(
-    os.environ.get('AGENT_NEO_NEO4J_CLUSTER_LEADER_SWITCH_RETRY_DELAY_SECONDS', '30.0')
+    os.environ.get('DJANGO_NEOMODEL_NEO4J_CLUSTER_LEADER_SWITCH_RETRY_DELAY_SECONDS', '30.0')
 )
 NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER: float = float(
-    os.environ.get('AGENT_NEO_NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER', '2.0')
+    os.environ.get('DJANGO_NEOMODEL_NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER', '2.0')
 )
 NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS: float = float(
-    os.environ.get('AGENT_NEO_NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS', '120.0')
+    os.environ.get('DJANGO_NEOMODEL_NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS', '120.0')
 )
 
 _active_database_url: str | None = None
@@ -108,8 +108,8 @@ def reconnect_graph_db_if_needed(graph_db_config: GraphDbConfig) -> None:
 
 
 def _quiet_neo4j_install_enabled() -> bool:
-    """Suppress neomodel ``install_all_labels`` output; on by default, set AGENT_NEO_QUIET_NEO4J_INSTALL to 0/false/no/off to show it."""
-    return os.environ.get('AGENT_NEO_QUIET_NEO4J_INSTALL', '1').lower() not in (
+    """Suppress neomodel ``install_all_labels`` output; on by default, set DJANGO_NEOMODEL_QUIET_NEO4J_INSTALL to 0/false/no/off to show it."""
+    return os.environ.get('DJANGO_NEOMODEL_QUIET_NEO4J_INSTALL', '1').lower() not in (
         '0',
         'false',
         'no',
@@ -119,7 +119,7 @@ def _quiet_neo4j_install_enabled() -> bool:
 
 def _label_install_precheck_enabled() -> bool:
     """Whether to skip ``install_all_labels`` when the schema is already complete."""
-    return os.environ.get('AGENT_NEO_LABEL_INSTALL_PRECHECK', '1').lower() not in (
+    return os.environ.get('DJANGO_NEOMODEL_LABEL_INSTALL_PRECHECK', '1').lower() not in (
         '0',
         'false',
         'no',

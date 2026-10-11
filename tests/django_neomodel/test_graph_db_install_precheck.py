@@ -399,7 +399,7 @@ def test_the_precheck_can_be_switched_off_by_environment() -> None:
         graph_core.set_label_install_callback(lambda: fake_db.install_all_labels())
         with _with_fake_models(_WIDGET, _UNMODELLED_REL), patch.object(
             graph_core, 'db', fake_db,
-        ), patch.dict('os.environ', {'AGENT_NEO_LABEL_INSTALL_PRECHECK': '0'}):
+        ), patch.dict('os.environ', {'DJANGO_NEOMODEL_LABEL_INSTALL_PRECHECK': '0'}):
             graph_core._install_labels()
     finally:
         _restore_callback(previous)

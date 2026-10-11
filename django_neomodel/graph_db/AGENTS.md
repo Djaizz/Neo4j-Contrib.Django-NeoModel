@@ -22,12 +22,12 @@ Read by `_core.py`, each with its default:
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `AGENT_NEO_NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS` | `5` | Attempts before a transient error is re-raised |
-| `AGENT_NEO_NEO4J_CLUSTER_LEADER_SWITCH_RETRY_DELAY_SECONDS` | `30.0` | Delay before the first retry |
-| `AGENT_NEO_NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER` | `2.0` | Growth of the delay per retry |
-| `AGENT_NEO_NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS` | `120.0` | Ceiling of the delay |
-| `AGENT_NEO_QUIET_NEO4J_INSTALL` | on | Silences `install_all_labels` output (`0` / `false` / `no` / `off` shows it) |
-| `AGENT_NEO_LABEL_INSTALL_PRECHECK` | on | The label-install precheck (`0` / `false` / `no` / `off` always runs the full install) |
+| `DJANGO_NEOMODEL_NEO4J_CLUSTER_LEADER_SWITCH_MAX_ATTEMPTS` | `5` | Attempts before a transient error is re-raised |
+| `DJANGO_NEOMODEL_NEO4J_CLUSTER_LEADER_SWITCH_RETRY_DELAY_SECONDS` | `30.0` | Delay before the first retry |
+| `DJANGO_NEOMODEL_NEO4J_CLUSTER_LEADER_SWITCH_BACKOFF_MULTIPLIER` | `2.0` | Growth of the delay per retry |
+| `DJANGO_NEOMODEL_NEO4J_CLUSTER_LEADER_SWITCH_MAX_RETRY_DELAY_SECONDS` | `120.0` | Ceiling of the delay |
+| `DJANGO_NEOMODEL_QUIET_NEO4J_INSTALL` | on | Silences `install_all_labels` output (`0` / `false` / `no` / `off` shows it) |
+| `DJANGO_NEOMODEL_LABEL_INSTALL_PRECHECK` | on | The label-install precheck (`0` / `false` / `no` / `off` always runs the full install) |
 
 ## Conventions
 
