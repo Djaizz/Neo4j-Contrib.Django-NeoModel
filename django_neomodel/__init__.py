@@ -211,6 +211,28 @@ class MetaClass(NodeMeta):
         setattr(new_cls, "_default_manager", NeoManager(new_cls))
         return new_cls
 
+    # Django's Options, resolved per class: built on first access
+    # (DjangoNode._build_options) and cached on that class alone, so a
+    # subclass defined or reached after its parent's Options exist builds its
+    # own instead of finding the parent's through the MRO. A data descriptor
+    # on the metaclass takes precedence over the class namespace, which routes
+    # Options.contribute_to_class's `cls._meta = self` through the setter into
+    # the per-class slot.
+    @property
+    def _meta(cls):
+        try:
+            return vars(cls)["_django_options"]
+        except KeyError:
+            return cls._build_options()
+
+    @_meta.setter
+    def _meta(cls, options):
+        setattr(cls, "_django_options", options)
+
+    @_meta.deleter
+    def _meta(cls):
+        delattr(cls, "_django_options")
+
 
 class _ObjectsDescriptor:
     """Descriptor that provides Django-like 'objects' API for NeoModel nodes.
@@ -235,23 +257,31 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
     # Usage: Model.objects.all() instead of Model.nodes.all()
     objects = _ObjectsDescriptor()
 
-    @classproperty
+    @property
     def _meta(self):
-        if hasattr(self.Meta, "unique_together"):
+        """The class's Options, reached from an instance (``node._meta``);
+        class-level ``Model._meta`` is the metaclass's per-class descriptor."""
+        return type(self)._meta
+
+    @classmethod
+    def _build_options(cls):
+        """Build Django's Options for this class and cache them on it (through
+        Options.contribute_to_class, which assigns ``cls._meta``)."""
+        if hasattr(cls.Meta, "unique_together"):
             raise NotImplementedError(
                 "unique_together property not supported by neomodel"
             )
 
-        opts = Options(self.Meta, app_label=self.Meta.app_label)
-        opts.contribute_to_class(self, self.__name__)
+        opts = Options(cls.Meta, app_label=cls.Meta.app_label)
+        opts.contribute_to_class(cls, cls.__name__)
 
-        # Set concrete_model to self for drf-spectacular compatibility
+        # Set concrete_model to the class for drf-spectacular compatibility
         # Django ORM sets concrete_model to the model itself for non-proxy models
-        opts.concrete_model = self
+        opts.concrete_model = cls
 
         # Find the primary key field name
         pk_field_name = None
-        for key, prop in self.__all_properties__:
+        for key, prop in cls.__all_properties__:
             opts.add_field(DjangoField(prop, key), getattr(prop, "private", False))
             if getattr(prop, "primary_key", False):
                 pk_field_name = key
@@ -276,7 +306,7 @@ class DjangoNode(StructuredNode, metaclass=MetaClass):
                     self.name = name
 
             pk_prop = PkProperty(pk_getter, pk_field_name)
-            setattr(self, 'pk', pk_prop)
+            setattr(cls, 'pk', pk_prop)
 
         return opts
 
